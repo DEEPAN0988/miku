@@ -4,7 +4,7 @@
     "bm25_top1_passes": 14,
     "bm25_top3_passes": 15,
     "neural_passes": 1,
-    "anchored_passes": 14,
+    "anchored_passes": 15,
     "slot_passes": 14
   },
   "cases": [
@@ -16,7 +16,7 @@
       "bm25_top3": [
         [
           "Find App",
-          8.401377721143483
+          9.00302440195861
         ],
         [
           "Get Time",
@@ -44,15 +44,15 @@
       "bm25_top3": [
         [
           "Find App",
-          4.388811252233685
+          4.740287398385117
+        ],
+        [
+          "Send Message",
+          2.279776151335215
         ],
         [
           "Get Volume",
-          2.0202283746822642
-        ],
-        [
-          "Close App",
-          1.8714820121575357
+          2.199219159739597
         ]
       ],
       "bm25_top1_ok": true,
@@ -72,7 +72,7 @@
       "bm25_top3": [
         [
           "Restart App",
-          3.824426640689344
+          4.085948633799224
         ],
         [
           "Get Time",
@@ -100,11 +100,11 @@
       "bm25_top3": [
         [
           "Restart App",
-          2.762565519233838
+          2.959340369618246
         ],
         [
           "Close App",
-          2.3557584697220215
+          2.5286298246161967
         ],
         [
           "Get Time",
@@ -115,8 +115,8 @@
       "bm25_top3_ok": true,
       "neural_action": "Close App",
       "neural_ok": false,
-      "anchored_action": "Close App",
-      "anchored_ok": false,
+      "anchored_action": "Restart App",
+      "anchored_ok": true,
       "slot_extracted": "visual studio code",
       "slot_ok": true
     },
@@ -128,15 +128,15 @@
       "bm25_top3": [
         [
           "Focus App",
-          10.91361409950954
-        ],
-        [
-          "List Running Apps",
-          1.743137436693572
+          11.421160753342312
         ],
         [
           "Set Volume",
-          1.4973726224736918
+          1.656512557858588
+        ],
+        [
+          "Inspect Screen",
+          1.656512557858588
         ]
       ],
       "bm25_top1_ok": true,
@@ -156,15 +156,15 @@
       "bm25_top3": [
         [
           "Focus App",
-          7.827633515734233
+          8.437663817346177
         ],
         [
           "Set Volume",
-          1.4973726224736918
+          1.656512557858588
         ],
         [
           "Play Query",
-          1.3980885439304744
+          1.547829393865679
         ]
       ],
       "bm25_top1_ok": true,
@@ -184,7 +184,7 @@
       "bm25_top3": [
         [
           "List Running Apps",
-          2.1942026445909284
+          2.357100384845736
         ],
         [
           "Get Time",
@@ -199,8 +199,8 @@
       "bm25_top3_ok": false,
       "neural_action": "Get chrome running",
       "neural_ok": false,
-      "anchored_action": "List Running Apps",
-      "anchored_ok": false,
+      "anchored_action": "Open App",
+      "anchored_ok": true,
       "slot_extracted": "chrome",
       "slot_ok": true
     },
@@ -212,7 +212,7 @@
       "bm25_top3": [
         [
           "Restart App",
-          3.824426640689344
+          4.085948633799224
         ],
         [
           "Get Time",
@@ -240,11 +240,11 @@
       "bm25_top3": [
         [
           "Find App",
-          7.89859157134633
+          8.495092063663918
         ],
         [
           "Search Web",
-          1.8050311539862423
+          1.9675869486494109
         ],
         [
           "Get Time",
@@ -268,23 +268,23 @@
       "bm25_top3": [
         [
           "Focus App",
-          2.5429953766661613
+          2.7270834406750217
         ],
         [
           "Open App",
-          2.1927539949835646
+          2.4186073997268918
         ],
         [
           "Search Web",
-          1.4973726224736918
+          1.656512557858588
         ]
       ],
       "bm25_top1_ok": false,
       "bm25_top3_ok": true,
       "neural_action": "Open App",
       "neural_ok": true,
-      "anchored_action": "Open App",
-      "anchored_ok": true,
+      "anchored_action": "Focus App",
+      "anchored_ok": false,
       "slot_extracted": "notepad",
       "slot_ok": true
     },
@@ -296,11 +296,11 @@
       "bm25_top3": [
         [
           "Find App",
-          4.388811252233685
+          4.740287398385117
         ],
         [
           "Search Web",
-          1.8050311539862423
+          1.9675869486494109
         ],
         [
           "Get Time",
@@ -324,11 +324,11 @@
       "bm25_top3": [
         [
           "Restart App",
-          3.824426640689344
+          4.085948633799224
         ],
         [
           "Close App",
-          2.3557584697220215
+          2.5286298246161967
         ],
         [
           "Get Time",
@@ -352,15 +352,15 @@
       "bm25_top3": [
         [
           "Find App",
-          9.263068159608224
+          10.026812116965678
         ],
         [
           "Get Volume",
-          2.0202283746822642
+          2.199219159739597
         ],
         [
           "Close App",
-          1.3142444135737172
+          1.4759873648856854
         ]
       ],
       "bm25_top1_ok": true,
@@ -380,15 +380,15 @@
       "bm25_top3": [
         [
           "Focus App",
-          8.893385724827276
+          9.569636906788794
         ],
         [
           "Set Volume",
-          1.4973726224736918
+          1.656512557858588
         ],
         [
           "Play Query",
-          1.3980885439304744
+          1.547829393865679
         ]
       ],
       "bm25_top1_ok": true,
@@ -408,15 +408,15 @@
       "bm25_top3": [
         [
           "Restart App",
-          5.525131038467676
+          5.918680739236492
         ],
         [
           "Find App",
-          1.9430125512182659
+          2.116177530045213
         ],
         [
           "Open App",
-          1.8050311539862423
+          1.9675869486494109
         ]
       ],
       "bm25_top1_ok": true,
@@ -436,15 +436,15 @@
       "bm25_top3": [
         [
           "Open App",
-          6.269897518467305
+          6.826048403842721
         ],
         [
           "Close App",
-          1.8714820121575357
+          2.039178954058122
         ],
         [
           "Search Web",
-          1.4973726224736918
+          1.656512557858588
         ]
       ],
       "bm25_top1_ok": true,
@@ -461,6 +461,6 @@
     "blocked": "[GUARDRAIL BLOCKED] Action 'Open App' has HIGH risk. Requires explicit user confirmation before execution. Planned call: Open App(argument='notepad')",
     "find": "[REAL APP SEARCH] Found 2 app(s) for 'calc': calculator (builtin), calc (builtin)",
     "launch": "[REAL APP LAUNCH] Launched application 'notepad' via target 'notepad.exe'.",
-    "focus": "[REAL WINDOW FOCUS] Brought window 'Untitled - Notepad' to foreground."
+    "focus": "[REAL WINDOW FOCUS] No active window found matching 'notepad'."
   }
 }

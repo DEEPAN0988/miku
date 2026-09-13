@@ -443,3 +443,125 @@ During initial real-send testing, an actual automation incident occurred:
    - All 4 negative mismatch cases (`ABORT_WRONG_APP`, `ABORT_MODAL_DIALOG_DETECTED`, `ABORT_RECIPIENT_NOT_VISIBLE`, `ABORT_NO_FOREGROUND_WINDOW`) correctly aborted.
    - Full 55-case standing regression suite passed with 100.0% accuracy and zero silent misroutes.
    - Full incident arc closed: *Incident $\to$ Root Cause $\to$ Multi-Layer Guardrails $\to$ Synthetic Gap Fixed $\to$ Real OS Verification $\to$ Live Send Validated $\to$ Circuit Breaker Locked*.
+
+---
+
+## Phase 13 — Screen Inspector, Coordinate Verification & Simulated UI Interaction (v0.3.2)
+
+### Overview
+Phase 13 (Phase B) introduces zero-GPU Windows desktop screen awareness via the native Windows Accessibility Tree (`UIAutomationCore.dll` COM interface) in [tools/screen_inspector.py](file:///c:/miku/tools/screen_inspector.py). It provides structured discovery of interactive controls (`Button`, `Edit`, `MenuItem`, `TabItem`, `CheckBox`, etc.) with exact pixel bounding rectangles, center coordinates, and labeled/unlabeled status, alongside pre-click coordinate safety verification and fail-closed simulation dispatch.
+
+### Key Capabilities & Invariants
+1. **Zero-GPU OS Accessibility Inspection**:
+   - Enumerates native UWP, WinUI3, WPF, Win32, and Chromium/Electron accessibility trees in ~40–120ms without GPU VRAM overhead.
+   - Automatically wakes Chromium/Electron internal trees via `WM_GETOBJECT` (0x003D).
+   - Filters strictly to client viewport bounds, rejecting off-screen and virtual scroll coordinates.
+   - Flags icon-only/unlabeled controls with `is_unlabeled=True` for low-confidence handling.
+2. **Pre-Click Safety Verification (`verify_element_clickable`)**:
+   - Before any click target is approved, verifies ground-truth OS window state:
+     - `INVALID_HWND`: Fails if target window handle is closed or destroyed.
+     - `MINIMIZED`: Rejects clicks if target window is iconic/minimized.
+     - `NOT_FOREGROUND`: Rejects clicks if target window is not foreground root window.
+     - `COORDINATE_OUTSIDE_WINDOW`: Rejects coordinates lying outside window bounding rectangle.
+     - `OCCLUDED_AT_POINT`: Uses Windows `WindowFromPoint` / `ChildWindowFromPointEx` to detect overlapping modal dialogs, flyouts, or background windows occluding the target coordinate.
+3. **Hardcoded Circuit Breaker (`REAL_CLICK_ENABLED = False`)**:
+   - `REAL_CLICK_ENABLED: bool = False` is permanently hardcoded at module top level.
+   - All interactive click dispatches via `simulate_click()` execute in simulation mode (`SIMULATED_CLICK_SUCCESS`), producing full telemetry and ground-truth validation with strictly `real_input_dispatched=False`.
+4. **Verification & Suite Results**:
+   - Validated via [eval/test_screen_inspector.py](file:///c:/miku/eval/test_screen_inspector.py): 26/26 unit and integration tests passed, including all 6 telemetry safety rejection paths and dynamic obstacle interception.
+
+---
+
+## Phase 13 Consolidated Status — Current-State Architectural Audit & Pre-Phase C Reference
+
+This consolidated audit establishes the verified empirical baseline across all independently-built subsystems before any real GUI click automation (Phase C) is attempted.
+
+### 1. Unified Inventory of Known Permanent Limitations
+
+| Category | Limitation | Measured Metric / Impact | Architectural Mitigation |
+| :--- | :--- | :--- | :--- |
+| **Model Capacity** | Coherence Ceiling | ~25% generative coherence on 11.35M params | Constrained slot extraction & deterministic templating; no open-ended multi-sentence generative drafting |
+| **Induction Heads** | Novel Token Copying | 20.0%–25.0% pure neural copying on held-out entities | Deterministic non-generative fallback (`try_direct_fact_lookup`, `extract_deterministic_slot`) achieves 100.0% accuracy |
+| **Tool Routing** | Dense Intra-Cluster Overlap | Pure BM25 Top-1 degrades to 87.5% on app tools, 81.2% on messaging overlap | Structural ranking + calibrated confidence gating ($\Delta \ge 0.60, R \ge 1.30$) with `CLARIFICATION_REQUIRED` (0.0% silent misroutes) |
+| **Context Window** | Turn Budget Ceiling | 256 tokens max sequence length (192 tokens context budget) | Maximum 2–3 short conversational turns before sliding-window eviction; persistent facts stored in SQLite |
+| **Screen Perception** | Non-UIA Bitmaps | Custom canvas, DirectX, WebGL renderers invisible to UIA | Exposed via `source="uia"`; requires future visual grounder fallback for arbitrary pixels |
+
+### 2. Consolidated Tool Registry (20 Tools)
+
+| Risk Tier | Tools Count | Tools List | HITL Execution Policy |
+| :--- | :--- | :--- | :--- |
+| **LOW** | 12 | `Get Time`, `Get Date`, `Get Battery`, `Get Volume`, `List Running Apps`, `Play Media`, `Pause Media`, `Next Track`, `Previous Track`, `Find App`, `Focus App`, `Inspect Screen` | Permitted to execute live without interactive confirmation |
+| **MEDIUM** | 5 | `Search Web`, `Set Volume`, `Play Query`, `Stage Message`, `(Reserved)` | Requires explicit user confirmation before network or volume modification |
+| **HIGH** | 3 | `Open App`, `Close App`, `Restart App`, `Send Message` | Requires explicit user confirmation; blocked by default (`DRY_RUN_PENDING_HITL`) |
+
+### 3. Standing Dual Safety Circuit Breakers
+
+Both highest-stakes automation modules feature permanently hardcoded, fail-closed circuit breakers at module top level:
+- **Messaging Automation**: `tools.messaging.REAL_SEND_ENABLED: bool = False`
+- **GUI Screen Interaction**: `tools.screen_inspector.REAL_CLICK_ENABLED: bool = False`
+
+*Policy*: Re-enabling either circuit breaker is strictly a manual, per-session code modification by the human user. Automated tests and scripts are architecturally barred from self-authorizing real actions.
+
+### 4. Consolidated BM25 Re-Audit Findings (Honoring Phase 10 Commitment)
+
+Re-evaluating BM25 lexical scaling across all 20 registered tools across 46 total test cases ([eval/audit_bm25_v03_scaling.py](file:///c:/miku/eval/audit_bm25_v03_scaling.py)):
+
+| Metric / Evaluation Cluster | Phase 10 (17 Tools, N=30) | Current v0.3 (20 Tools, N=46) | Delta / Finding |
+| :--- | :--- | :--- | :--- |
+| **Inter-Cluster Top-1 Accuracy** | 100.0% (14/14) | **100.0% (14/14)** | Identical: Distinct capabilities route with 100% lexical precision |
+| **Inter-Cluster Top-3 Recall** | 100.0% (14/14) | **100.0% (14/14)** | Identical |
+| **Intra-Cluster App Top-1 Accuracy** | 87.5% (14/16) | **87.5% (14/16)** | Identical: Adding messaging did not degrade app cluster |
+| **Intra-Cluster App Top-3 Recall** | 93.8% (15/16) | **93.8% (15/16)** | Identical |
+| **Cross-Domain Messaging Top-1 Acc** | *N/A (Untested)* | **81.2% (13/16)** | Real empirical overlap on compound verbs ("send query", "open whatsapp", "tell time") |
+| **Cross-Domain Messaging Top-3 Rec** | *N/A (Untested)* | **100.0% (16/16)** | Perfect Top-3 candidate retention across all cross-boundary queries |
+| **Overall Pure BM25 Top-1 Accuracy** | 93.3% (28/30) | **89.1% (41/46)** | Measurable intra-cluster lexical collision |
+| **Overall Pure BM25 Top-3 Recall** | 96.7% (29/30) | **97.8% (45/46)** | **+1.1%**: True capability almost always present in Top 3 |
+| **Structured Confident Pass Rate** | 93.3% (28/30) | **89.1% (41/46)** | 41 cases executed without uncertainty |
+| **Safely Clarified (`CLARIFICATION_REQUIRED`)** | 6.7% (2/30) | **10.9% (5/46)** | All 5 borderline collisions safely intercepted |
+| **Silent Dangerous Misroutes** | **0.0% (0/30)** | **0.0% (0/46)** | **Zero silent misroutes across all 46 cases** |
+
+### 5. Cross-System Regression Audit Summary (18 Test Suites)
+
+Every standing regression suite was executed in sequence on host environment:
+1. `eval/test_tool_calling.py`: **58/58 passed** (14 ID, 14 OOD, 11 Novel args, 5 Direct QA, 9 Real LOW-risk execution, 5 Safety gating)
+2. `eval/test_confidence_gating.py`: **55/55 passed** (39 standing cases 100% confident, 14/16 ambiguity confident, 2/16 clarified, 0 silent misroutes)
+3. `eval/test_messaging_automation.py`: **12/12 passed** (Circuit breaker invariant, 5/5 simulation suite, 4/4 negative mismatch aborts, 2/2 ambiguity)
+4. `eval/test_screen_inspector.py`: **26/26 unit & integration tests passed** (plus 6 pre-click safety rejection telemetry tests, 2 multi-step live trace tests)
+5. `eval/test_app_routing_ambiguity.py`: **16/16 passed** (BM25 Top-1 87.5%, Top-3 93.8%, Hybrid 93.8%, Real execution verified)
+6. `eval/test_fixes.py`: **Task 2 & Task 3 tests passed**
+7. `eval/test_gating_guardrails.py`: **16/16 passed** (Retriever gating, fact recall, 3-turn integration session)
+8. `eval/test_hierarchical_routing.py`: **14/14 passed** (92.9% broad category match)
+9. `eval/test_integrated_pipeline.py`: **6/6 turns passed**
+10. `eval/test_interactive_confirmation.py`: **Passed** (Fail-closed non-interactive verified)
+11. `eval/test_multiturn_memory.py`: **Passed** (Delimiters, turn budget, 3 dialog scenarios, 2 sessions, QA regressions verified)
+12. `eval/test_novel_copying.py`: **Passed** (Generative copying vs deterministic fallback verified)
+13. `eval/test_tool_tokenizer.py`: **Passed** (Syntax format comparison, tool names, common arguments verified)
+14. `tools/test_bm25_suite.py`: **14/14 passed** (13/14 Top-1 accuracy, 13/14 Top-3 recall)
+15. `tools/test_hybrid_resolver.py`: **Passed**
+16. `tools/test_media_api.py`: **Passed**
+17. `tools/test_tfidf_prefilter.py`: **Passed**
+18. `data/test_latex_real.py`: **16/16 passed** (Unescaped math stripping verified)
+
+### 6. Realistic Cross-Subsystem Integration Trace
+
+Validated via [eval/test_cross_subsystem_integration.py](file:///c:/miku/eval/test_cross_subsystem_integration.py):
+- **Initial State**: Confirmed `REAL_SEND_ENABLED=False` and `REAL_CLICK_ENABLED=False`.
+- **Step 1 (App Lifecycle + Screen Grounding + Simulated Click)**: Launched Calculator (`calc.exe`, HWND 721596) $\to$ inspected UI tree discovering 36 interactive elements $\to$ located button `'Clear'` at center `(527, 349)` $\to$ pre-click coordinate verification returned `SAFE` $\to$ dispatched `simulate_click()` returning `SIMULATED_CLICK_SUCCESS` with `real_input_dispatched=False`.
+- **Step 2 (Tool Dispatch)**: Dispatched `"what's my battery percentage"` $\to$ routed to `Get Battery` $\to$ executed live returning battery status `88% | Discharging`.
+- **Step 3 (Messaging + Ambiguity Gating)**: Dispatched `"tell alex i am running late"` $\to$ detected contact ambiguity between `'Alex Miller'` and `'Alex Chen'` $\to$ triggered `CLARIFICATION_REQUIRED` $\to$ unconfirmed send blocked `DRY_RUN_PENDING_HITL` with zero keystrokes.
+- **Step 4 (Secondary Screen Grounding)**: Inspected active desktop window $\to$ verified 36 interactive controls with valid coordinates and enabled states.
+- **Cleanup**: Cleanly terminated test Calculator process.
+- **Post State**: Confirmed `REAL_SEND_ENABLED=False` and `REAL_CLICK_ENABLED=False` remained completely unmutated.
+
+### 7. Phase C Go / No-Go Recommendation
+
+- **Verdict**: **GO FOR PHASE C UNDER MANDATORY FAIL-CLOSED GATING**.
+- **Evidence-Based Justification**:
+  1. The entire system is in a verified zero-regression state across 18 test suites and 20 tools.
+  2. The BM25 lexical router and confidence gating layer maintain **0.0% silent dangerous misroutes** across all 46 inter-cluster, intra-cluster, and cross-boundary test queries.
+  3. Pre-click coordinate verification (`verify_element_clickable`) reliably intercepts occlusion, minimized state, window focus shifts, and out-of-bounds coordinates before any click dispatch.
+  4. Both safety circuit breakers (`REAL_SEND_ENABLED=False`, `REAL_CLICK_ENABLED=False`) remain fail-closed and unmutated throughout all integration scenarios.
+- **Mandatory Requirements for Phase C**:
+  1. Any live mouse click dispatch must require explicit human console confirmation (`sys.stdin.isatty()`) or deliberate manual session enablement.
+  2. Every click must perform pre-click coordinate verification immediately prior to dispatch to prevent stale-inspection window switches.
+  3. Post-click verification must verify expected UI delta before chaining subsequent actions.

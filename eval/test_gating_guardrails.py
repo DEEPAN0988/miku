@@ -195,9 +195,9 @@ def run_task3_integration_session(model: MikuLM, tok: MikuTokenizer, device: tor
     res1 = session.chat(turn1_user)
     transcript.append(("Turn 1", turn1_user, res1))
 
-    # TURN 2: Anaphoric follow-up (Should get 1-turn history + natural fact)
+    # TURN 2: Anaphoric follow-up (Should get 1-turn history + natural fact via neural retriever)
     turn2_user = "What is my name?"
-    res2 = session.chat(turn2_user)
+    res2 = session.chat(turn2_user, use_deterministic_fallback=False)
     transcript.append(("Turn 2", turn2_user, res2))
 
     # TURN 3: Unrelated factual QA (Should get ZERO history via gating)
