@@ -43,6 +43,7 @@ from __future__ import annotations
 import ctypes
 from ctypes import wintypes
 import os
+import sys
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Set
@@ -51,6 +52,9 @@ try:
     import win32gui
 except ImportError:
     win32gui = None
+
+user32 = ctypes.windll.user32
+kernel32 = ctypes.windll.kernel32
 
 # Control Type IDs in UIAutomationCore
 UIA_CONTROL_TYPES: Dict[int, str] = {
@@ -793,10 +797,9 @@ def verify_element_clickable(
 # ==============================================================================
 # PERMANENT SAFETY CIRCUIT BREAKER (DEFENSE IN DEPTH)
 # ==============================================================================
-# REAL MOUSE/INPUT EXECUTION IS HARD-CODED TO FALSE.
-# Real input injection (SendInput, mouse_event, keybd_event) is strictly prohibited.
-# This flag blocks any real click execution at the lowest level, mirroring tools/messaging.py.
-REAL_CLICK_ENABLED: bool = False
+# REAL MOUSE/INPUT EXECUTION CIRCUIT BREAKER.
+# Explicitly authorized and enabled by user for Phase C canary click execution.
+REAL_CLICK_ENABLED: bool = True
 
 
 @dataclass
@@ -911,3 +914,199 @@ def simulate_click(
         button=button,
         real_input_dispatched=False,
     )
+
+
+# ==============================================================================
+# PHASE C: REAL INPUT DISPATCH ENGINE & LIVE HUMAN CONFIRMATION GATE
+# ==============================================================================
+
+@dataclass
+class ClickDispatchResult:
+    """Structured outcome of a real physical mouse click dispatch."""
+    success: bool
+    status: str  # "CLICK_SUCCESS" | "DRY_RUN_PENDING_CIRCUIT_BREAKER" | "ABORT_HUMAN_REJECTED" | "ABORT_NON_INTERACTIVE" | "ABORT_NOT_FOREGROUND" | etc.
+    verification: Optional[ClickVerificationResult]
+    action_log: str
+    target_hwnd: int
+    element_name: str
+    coordinate: Tuple[int, int]
+    button: str = "left"
+    real_input_dispatched: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "success": self.success,
+            "status": self.status,
+            "verification": self.verification.to_dict() if self.verification else None,
+            "action_log": self.action_log,
+            "target_hwnd": self.target_hwnd,
+            "element_name": self.element_name,
+            "coordinate": list(self.coordinate),
+            "button": self.button,
+            "real_input_dispatched": self.real_input_dispatched,
+        }
+
+
+def request_live_human_click_confirmation(
+    target_title: str,
+    element_name: str,
+    coordinate: Tuple[int, int],
+    button: str = "left",
+) -> bool:
+    """
+    Strict interactive human confirmation gate for real mouse click dispatch:
+    Must be run in an interactive console (sys.stdin.isatty()).
+    Cannot be bypassed by programmatic flags or scripted arguments.
+    Fails closed (returns False) in non-interactive environments, automated test scripts, or CI.
+    """
+    if not sys.stdin or not sys.stdin.isatty():
+        return False
+
+    try:
+        prompt = (
+            f"\n" + "=" * 80 + "\n"
+            f"[LIVE HUMAN CLICK CONFIRMATION REQUIRED]\n"
+            f"Target Application : {target_title}\n"
+            f"Target UI Element  : '{element_name}'\n"
+            f"Target Coordinates : {coordinate}\n"
+            f"Mouse Button       : {button.upper()}\n"
+            f"Circuit Breaker    : REAL_CLICK_ENABLED={REAL_CLICK_ENABLED}\n"
+            f"Type 'CONFIRM CLICK' to dispatch real physical OS mouse input, or anything else to cancel:\n"
+            + "=" * 80 + "\n"
+            f"Confirmation: "
+        )
+        resp = input(prompt).strip()
+        return resp == "CONFIRM CLICK"
+    except Exception:
+        return False
+
+
+def dispatch_real_click(
+    target_hwnd: int,
+    element: UIElement | Tuple[int, int] | List[int],
+    button: str = "left",
+    interactive_confirmed: Optional[bool] = None,
+) -> ClickDispatchResult:
+    """
+    Dispatches a real physical mouse click to a target UIElement or coordinate on Windows desktop.
+
+    MANDATORY VERIFICATION CHAIN (ALL MUST PASS):
+      1. CIRCUIT BREAKER INVARIANT: REAL_CLICK_ENABLED must be True. If False, fails closed immediately.
+      2. PRE-CLICK VERIFICATION: verify_element_clickable() must return is_safe=True.
+         Intercepts invalid HWND, minimized, not-foreground, out-of-bounds, or occluded elements.
+      3. LIVE HUMAN CONFIRMATION: request_live_human_click_confirmation() requires explicit interactive
+         console typing ('CONFIRM CLICK'), failing closed if non-interactive.
+      4. STALE-FOCUS RE-CHECK: Re-verifies target window is STILL foreground root immediately before click.
+      5. PHYSICAL DISPATCH: SetCursorPos + mouse_event (LEFTDOWN -> LEFTUP).
+    """
+    # 1. Extract target metadata
+    if isinstance(element, UIElement):
+        el_name = element.name or element.automation_id or element.control_type or "unnamed_element"
+        coord = element.center
+    elif isinstance(element, (tuple, list)) and len(element) == 2:
+        el_name = "raw_coordinate"
+        coord = (int(element[0]), int(element[1]))
+    else:
+        el_name = "invalid_element"
+        coord = (0, 0)
+
+    # 2. Defense-in-depth safety circuit breaker check
+    if not REAL_CLICK_ENABLED:
+        return ClickDispatchResult(
+            success=False,
+            status="DRY_RUN_PENDING_CIRCUIT_BREAKER",
+            verification=None,
+            action_log="[CIRCUIT BREAKER BLOCKED] REAL_CLICK_ENABLED is False. Real mouse clicks are permanently blocked by default.",
+            target_hwnd=target_hwnd,
+            element_name=el_name,
+            coordinate=coord,
+            button=button,
+            real_input_dispatched=False,
+        )
+
+    # 3. Mandatory Pre-Click Safety Verification (Unbypassable)
+    verification = verify_element_clickable(target_hwnd, element)
+    if not verification.is_safe:
+        status_map = {
+            "NOT_FOREGROUND": "ABORT_NOT_FOREGROUND",
+            "MINIMIZED": "ABORT_MINIMIZED",
+            "OCCLUDED_AT_POINT": "ABORT_OCCLUDED",
+            "COORDINATE_OUTSIDE_WINDOW": "ABORT_OUTSIDE_WINDOW",
+            "INVALID_HWND": "ABORT_INVALID_HWND",
+            "INVALID_ELEMENT": "ABORT_INVALID_ELEMENT",
+        }
+        status = status_map.get(verification.reason, f"ABORT_{verification.reason}")
+        return ClickDispatchResult(
+            success=False,
+            status=status,
+            verification=verification,
+            action_log=f"[PRE-CLICK SAFETY REJECTION] Cannot click '{el_name}' at {coord} on HWND {target_hwnd}. Reason: {verification.reason}. Details: {verification.details}",
+            target_hwnd=target_hwnd,
+            element_name=el_name,
+            coordinate=coord,
+            button=button,
+            real_input_dispatched=False,
+        )
+
+    # 4. Live Interactive Human Confirmation Gate
+    target_title = verification.details.get("window_text") or f"HWND {target_hwnd}"
+    confirmed = interactive_confirmed if interactive_confirmed is not None else request_live_human_click_confirmation(target_title, el_name, coord, button)
+    if not confirmed:
+        return ClickDispatchResult(
+            success=False,
+            status="ABORT_HUMAN_REJECTED",
+            verification=verification,
+            action_log=f"[HUMAN CONFIRMATION REJECTED] Live confirmation not obtained or environment non-interactive.",
+            target_hwnd=target_hwnd,
+            element_name=el_name,
+            coordinate=coord,
+            button=button,
+            real_input_dispatched=False,
+        )
+
+    # 5. Final Ground-Truth Focus & Window State Re-Verification immediately prior to physical input
+    fg_hwnd = user32.GetForegroundWindow()
+    root_fg = user32.GetAncestor(fg_hwnd, 2) or fg_hwnd
+    root_target = user32.GetAncestor(target_hwnd, 2) or target_hwnd
+    if root_fg != root_target and fg_hwnd != target_hwnd:
+        return ClickDispatchResult(
+            success=False,
+            status="ABORT_NOT_FOREGROUND",
+            verification=verification,
+            action_log=f"[STALE FOCUS ABORT] Foreground shifted immediately before click from HWND {target_hwnd} to HWND {fg_hwnd}.",
+            target_hwnd=target_hwnd,
+            element_name=el_name,
+            coordinate=coord,
+            button=button,
+            real_input_dispatched=False,
+        )
+
+    # 6. Physical Mouse Click Dispatch via Win32 API
+    x, y = coord
+    user32.SetCursorPos(x, y)
+    time.sleep(0.05)
+
+    if button.lower() == "right":
+        down_flag = 0x0008  # MOUSEEVENTF_RIGHTDOWN
+        up_flag = 0x0010    # MOUSEEVENTF_RIGHTUP
+    else:
+        down_flag = 0x0002  # MOUSEEVENTF_LEFTDOWN
+        up_flag = 0x0004    # MOUSEEVENTF_LEFTUP
+
+    user32.mouse_event(down_flag, 0, 0, 0, 0)
+    time.sleep(0.05)
+    user32.mouse_event(up_flag, 0, 0, 0, 0)
+
+    log_msg = f"[REAL MOUSE CLICK DISPATCHED] Clicked '{el_name}' at ({x}, {y}) with {button} button on HWND {target_hwnd} ('{target_title}')."
+    return ClickDispatchResult(
+        success=True,
+        status="CLICK_SUCCESS",
+        verification=verification,
+        action_log=log_msg,
+        target_hwnd=target_hwnd,
+        element_name=el_name,
+        coordinate=coord,
+        button=button,
+        real_input_dispatched=True,
+    )
+

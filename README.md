@@ -565,3 +565,27 @@ Validated via [eval/test_cross_subsystem_integration.py](file:///c:/miku/eval/te
   1. Any live mouse click dispatch must require explicit human console confirmation (`sys.stdin.isatty()`) or deliberate manual session enablement.
   2. Every click must perform pre-click coordinate verification immediately prior to dispatch to prevent stale-inspection window switches.
   3. Post-click verification must verify expected UI delta before chaining subsequent actions.
+
+---
+
+## Phase C — First Live Physical Mouse Click Canary Execution (v0.3.3)
+
+### Overview
+Following the strict user-authorized canary pattern established for messaging's first real send, Phase C executed the project's **first-ever real physical mouse input** on the Windows desktop. The action was restricted to a single, low-stakes, non-networked, non-file-modifying, visually verifiable target: left-clicking the `"Clear"` button in Windows Calculator.
+
+### Execution Log & Full Verification Chain
+
+| Verification Gate | Ground-Truth Telemetry / Status | Verdict |
+| :--- | :--- | :--- |
+| **Gate 1: Circuit Breaker Authorization** | `tools.screen_inspector.REAL_CLICK_ENABLED: bool = True` explicitly authorized by user | **PASSED** |
+| **Gate 2: Target Window Grounding** | HWND `459506` (`Calculator`, Process: `applicationframehost.exe`, PID `16880`) | **PASSED** |
+| **Gate 3: Control Localization** | Located target button `'Clear'` (`automation_id: clearButton`) at center coordinate `(527, 349)` | **PASSED** |
+| **Gate 4: Pre-Click Safety Verification** | `verify_element_clickable(459506, target_btn)`: Topmost hit HWND `1051136` (`Windows.UI.Core.CoreWindow`), foreground match, non-occluded | **SAFE (PASSED)** |
+| **Gate 5: Live Human Confirmation** | Console prompt received typed phrase: `"CONFIRM CLICK"` | **CONFIRMED (PASSED)** |
+| **Gate 6: Stale-Focus Check** | Foreground re-checked immediately prior to input: HWND `459506` remained foreground root | **PASSED** |
+| **Gate 7: Physical Mouse Dispatch** | `user32.SetCursorPos(527, 349)` + `user32.mouse_event(MOUSEEVENTF_LEFTDOWN -> MOUSEEVENTF_LEFTUP)` | **CLICK_SUCCESS (real_input_dispatched=True)** |
+| **Gate 8: Independent Post-Click Audit** | Re-inspected Calculator UI tree: 36 interactive elements responsive | **VERIFIED** |
+
+- **Audit Artifact**: Structured telemetry permanently recorded in [`logs/phase13_consolidation/real_click_canary_audit.json`](file:///c:/miku/logs/phase13_consolidation/real_click_canary_audit.json).
+- **Circuit Breaker Status**: Awaiting explicit user confirmation to revert `REAL_CLICK_ENABLED` to `False` or maintain current session state.
+
