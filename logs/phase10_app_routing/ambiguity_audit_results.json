@@ -1,0 +1,466 @@
+{
+  "metrics": {
+    "total": 16,
+    "bm25_top1_passes": 14,
+    "bm25_top3_passes": 15,
+    "neural_passes": 1,
+    "anchored_passes": 14,
+    "slot_passes": 14
+  },
+  "cases": [
+    {
+      "id": "clear_find_1",
+      "instruction": "Where is blender installed on this computer?",
+      "expected_action": "Find App",
+      "expected_arg": "blender",
+      "bm25_top3": [
+        [
+          "Find App",
+          8.401377721143483
+        ],
+        [
+          "Get Time",
+          0.0
+        ],
+        [
+          "Get Date",
+          0.0
+        ]
+      ],
+      "bm25_top1_ok": true,
+      "bm25_top3_ok": true,
+      "neural_action": "Search Web",
+      "neural_ok": false,
+      "anchored_action": "Find App",
+      "anchored_ok": true,
+      "slot_extracted": "blender",
+      "slot_ok": true
+    },
+    {
+      "id": "clear_find_2",
+      "instruction": "Locate the discord application on my machine.",
+      "expected_action": "Find App",
+      "expected_arg": "discord",
+      "bm25_top3": [
+        [
+          "Find App",
+          4.388811252233685
+        ],
+        [
+          "Get Volume",
+          2.0202283746822642
+        ],
+        [
+          "Close App",
+          1.8714820121575357
+        ]
+      ],
+      "bm25_top1_ok": true,
+      "bm25_top3_ok": true,
+      "neural_action": "Pause Media",
+      "neural_ok": false,
+      "anchored_action": "Find App",
+      "anchored_ok": true,
+      "slot_extracted": "discord",
+      "slot_ok": true
+    },
+    {
+      "id": "clear_restart_1",
+      "instruction": "Relaunch slack because it stopped responding.",
+      "expected_action": "Restart App",
+      "expected_arg": "slack",
+      "bm25_top3": [
+        [
+          "Restart App",
+          3.824426640689344
+        ],
+        [
+          "Get Time",
+          0.0
+        ],
+        [
+          "Get Date",
+          0.0
+        ]
+      ],
+      "bm25_top1_ok": true,
+      "bm25_top3_ok": true,
+      "neural_action": "Close App",
+      "neural_ok": false,
+      "anchored_action": "Restart App",
+      "anchored_ok": true,
+      "slot_extracted": "slack",
+      "slot_ok": true
+    },
+    {
+      "id": "clear_restart_2",
+      "instruction": "Reboot the visual studio code process.",
+      "expected_action": "Restart App",
+      "expected_arg": "visual studio code",
+      "bm25_top3": [
+        [
+          "Restart App",
+          2.762565519233838
+        ],
+        [
+          "Close App",
+          2.3557584697220215
+        ],
+        [
+          "Get Time",
+          0.0
+        ]
+      ],
+      "bm25_top1_ok": true,
+      "bm25_top3_ok": true,
+      "neural_action": "Close App",
+      "neural_ok": false,
+      "anchored_action": "Close App",
+      "anchored_ok": false,
+      "slot_extracted": "visual studio code",
+      "slot_ok": true
+    },
+    {
+      "id": "clear_focus_1",
+      "instruction": "Switch to the active chrome window.",
+      "expected_action": "Focus App",
+      "expected_arg": "chrome",
+      "bm25_top3": [
+        [
+          "Focus App",
+          10.91361409950954
+        ],
+        [
+          "List Running Apps",
+          1.743137436693572
+        ],
+        [
+          "Set Volume",
+          1.4973726224736918
+        ]
+      ],
+      "bm25_top1_ok": true,
+      "bm25_top3_ok": true,
+      "neural_action": "Close App",
+      "neural_ok": false,
+      "anchored_action": "Focus App",
+      "anchored_ok": true,
+      "slot_extracted": "chrome",
+      "slot_ok": true
+    },
+    {
+      "id": "clear_focus_2",
+      "instruction": "Bring calculator to the foreground.",
+      "expected_action": "Focus App",
+      "expected_arg": "calculator",
+      "bm25_top3": [
+        [
+          "Focus App",
+          7.827633515734233
+        ],
+        [
+          "Set Volume",
+          1.4973726224736918
+        ],
+        [
+          "Play Query",
+          1.3980885439304744
+        ]
+      ],
+      "bm25_top1_ok": true,
+      "bm25_top3_ok": true,
+      "neural_action": "Open App",
+      "neural_ok": false,
+      "anchored_action": "Focus App",
+      "anchored_ok": true,
+      "slot_extracted": "calculator",
+      "slot_ok": true
+    },
+    {
+      "id": "ambig_open_vs_find",
+      "instruction": "Get chrome running on my PC.",
+      "expected_action": "Open App",
+      "expected_arg": "chrome",
+      "bm25_top3": [
+        [
+          "List Running Apps",
+          2.1942026445909284
+        ],
+        [
+          "Get Time",
+          0.0
+        ],
+        [
+          "Get Date",
+          0.0
+        ]
+      ],
+      "bm25_top1_ok": false,
+      "bm25_top3_ok": false,
+      "neural_action": "Get chrome running",
+      "neural_ok": false,
+      "anchored_action": "List Running Apps",
+      "anchored_ok": false,
+      "slot_extracted": "chrome",
+      "slot_ok": true
+    },
+    {
+      "id": "ambig_restart_vs_close",
+      "instruction": "Restart my browser.",
+      "expected_action": "Restart App",
+      "expected_arg": "browser",
+      "bm25_top3": [
+        [
+          "Restart App",
+          3.824426640689344
+        ],
+        [
+          "Get Time",
+          0.0
+        ],
+        [
+          "Get Date",
+          0.0
+        ]
+      ],
+      "bm25_top1_ok": true,
+      "bm25_top3_ok": true,
+      "neural_action": "Close App",
+      "neural_ok": false,
+      "anchored_action": "Restart App",
+      "anchored_ok": true,
+      "slot_extracted": null,
+      "slot_ok": false
+    },
+    {
+      "id": "ambig_find_vs_web",
+      "instruction": "Find where spotify is installed.",
+      "expected_action": "Find App",
+      "expected_arg": "spotify",
+      "bm25_top3": [
+        [
+          "Find App",
+          7.89859157134633
+        ],
+        [
+          "Search Web",
+          1.8050311539862423
+        ],
+        [
+          "Get Time",
+          0.0
+        ]
+      ],
+      "bm25_top1_ok": true,
+      "bm25_top3_ok": true,
+      "neural_action": "Search Web",
+      "neural_ok": false,
+      "anchored_action": "Find App",
+      "anchored_ok": true,
+      "slot_extracted": "spotify",
+      "slot_ok": true
+    },
+    {
+      "id": "ambig_bring_up_focus_open",
+      "instruction": "Bring up notepad right now.",
+      "expected_action": "Open App",
+      "expected_arg": "notepad",
+      "bm25_top3": [
+        [
+          "Focus App",
+          2.5429953766661613
+        ],
+        [
+          "Open App",
+          2.1927539949835646
+        ],
+        [
+          "Search Web",
+          1.4973726224736918
+        ]
+      ],
+      "bm25_top1_ok": false,
+      "bm25_top3_ok": true,
+      "neural_action": "Open App",
+      "neural_ok": true,
+      "anchored_action": "Open App",
+      "anchored_ok": true,
+      "slot_extracted": "notepad",
+      "slot_ok": true
+    },
+    {
+      "id": "ambig_search_pc_vs_web",
+      "instruction": "Search for chrome on my computer.",
+      "expected_action": "Find App",
+      "expected_arg": "chrome",
+      "bm25_top3": [
+        [
+          "Find App",
+          4.388811252233685
+        ],
+        [
+          "Search Web",
+          1.8050311539862423
+        ],
+        [
+          "Get Time",
+          0.0
+        ]
+      ],
+      "bm25_top1_ok": true,
+      "bm25_top3_ok": true,
+      "neural_action": "Search Web",
+      "neural_ok": false,
+      "anchored_action": "Find App",
+      "anchored_ok": true,
+      "slot_extracted": "chrome",
+      "slot_ok": true
+    },
+    {
+      "id": "ambig_kill_relaunch",
+      "instruction": "Kill and restart slack.",
+      "expected_action": "Restart App",
+      "expected_arg": "slack",
+      "bm25_top3": [
+        [
+          "Restart App",
+          3.824426640689344
+        ],
+        [
+          "Close App",
+          2.3557584697220215
+        ],
+        [
+          "Get Time",
+          0.0
+        ]
+      ],
+      "bm25_top1_ok": true,
+      "bm25_top3_ok": true,
+      "neural_action": "Close App",
+      "neural_ok": false,
+      "anchored_action": "Restart App",
+      "anchored_ok": true,
+      "slot_extracted": null,
+      "slot_ok": false
+    },
+    {
+      "id": "ambig_check_installed",
+      "instruction": "Discover which software is installed on this machine.",
+      "expected_action": "Find App",
+      "expected_arg": "software",
+      "bm25_top3": [
+        [
+          "Find App",
+          9.263068159608224
+        ],
+        [
+          "Get Volume",
+          2.0202283746822642
+        ],
+        [
+          "Close App",
+          1.3142444135737172
+        ]
+      ],
+      "bm25_top1_ok": true,
+      "bm25_top3_ok": true,
+      "neural_action": "Search Web",
+      "neural_ok": false,
+      "anchored_action": "Find App",
+      "anchored_ok": true,
+      "slot_extracted": "software",
+      "slot_ok": true
+    },
+    {
+      "id": "ambig_switch_window",
+      "instruction": "Switch over to the terminal window.",
+      "expected_action": "Focus App",
+      "expected_arg": "terminal",
+      "bm25_top3": [
+        [
+          "Focus App",
+          8.893385724827276
+        ],
+        [
+          "Set Volume",
+          1.4973726224736918
+        ],
+        [
+          "Play Query",
+          1.3980885439304744
+        ]
+      ],
+      "bm25_top1_ok": true,
+      "bm25_top3_ok": true,
+      "neural_action": "Close App",
+      "neural_ok": false,
+      "anchored_action": "Focus App",
+      "anchored_ok": true,
+      "slot_extracted": "terminal",
+      "slot_ok": true
+    },
+    {
+      "id": "ambig_cycle_app",
+      "instruction": "Cycle and bounce the terminal app.",
+      "expected_action": "Restart App",
+      "expected_arg": "terminal",
+      "bm25_top3": [
+        [
+          "Restart App",
+          5.525131038467676
+        ],
+        [
+          "Find App",
+          1.9430125512182659
+        ],
+        [
+          "Open App",
+          1.8050311539862423
+        ]
+      ],
+      "bm25_top1_ok": true,
+      "bm25_top3_ok": true,
+      "neural_action": "Open App",
+      "neural_ok": false,
+      "anchored_action": "Restart App",
+      "anchored_ok": true,
+      "slot_extracted": "terminal",
+      "slot_ok": true
+    },
+    {
+      "id": "ambig_fire_up_app",
+      "instruction": "Fire up the calculator application.",
+      "expected_action": "Open App",
+      "expected_arg": "calculator",
+      "bm25_top3": [
+        [
+          "Open App",
+          6.269897518467305
+        ],
+        [
+          "Close App",
+          1.8714820121575357
+        ],
+        [
+          "Search Web",
+          1.4973726224736918
+        ]
+      ],
+      "bm25_top1_ok": true,
+      "bm25_top3_ok": true,
+      "neural_action": "Pause Media",
+      "neural_ok": false,
+      "anchored_action": "Open App",
+      "anchored_ok": true,
+      "slot_extracted": "calculator",
+      "slot_ok": true
+    }
+  ],
+  "real_execution": {
+    "blocked": "[GUARDRAIL BLOCKED] Action 'Open App' has HIGH risk. Requires explicit user confirmation before execution. Planned call: Open App(argument='notepad')",
+    "find": "[REAL APP SEARCH] Found 2 app(s) for 'calc': calculator (builtin), calc (builtin)",
+    "launch": "[REAL APP LAUNCH] Launched application 'notepad' via target 'notepad.exe'.",
+    "focus": "[REAL WINDOW FOCUS] Brought window 'Untitled - Notepad' to foreground."
+  }
+}

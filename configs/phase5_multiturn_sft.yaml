@@ -1,0 +1,55 @@
+# MIKU Phase 5 - Multi-Turn SFT Configuration
+# STATUS: READY — Fine-tunes canonical SFT checkpoint on multi-turn reference dialogues + Dolly replay
+
+model:
+  preset: tiny
+  vocab_size: 32000
+  n_layers: 4
+  n_heads: 4
+  d_model: 256
+  d_ff: 1024
+  max_seq_len: 256
+  dropout: 0.1
+  weight_tie_embeddings: true
+  rope_theta: 10000.0
+
+tokenizer:
+  model_prefix: data/processed/tokenizer/miku_bpe
+  vocab_size: 32000
+  model_type: bpe
+  character_coverage: 0.9995
+
+data:
+  train_jsonl: data/processed/sft_multiturn/train_multiturn.jsonl
+  val_jsonl: data/processed/sft_multiturn/val_multiturn.jsonl
+  max_seq_len: 256
+
+training:
+  batch_size: 8
+  gradient_accumulation_steps: 2
+  num_workers: 0
+
+  optimizer: adamw
+  learning_rate: 1.0e-4          # Half of Phase 4 SFT LR for delicate second-pass adaptation
+  weight_decay: 0.1
+  betas: [0.9, 0.95]
+  eps: 1.0e-8
+  grad_clip: 1.0
+  lr_warmup_steps: 50
+  lr_min_factor: 0.1
+  max_steps: 800                 # ~3.4 epochs over 3,800 examples @ effective batch 16
+
+  dtype: auto
+  checkpoint_dir: checkpoints/phase5_multiturn_sft
+  checkpoint_every_n_steps: 50
+  sample_every_n_steps: 50
+  sample_max_new_tokens: 40
+  sample_temperature: 0.7
+  sample_top_p: 0.9
+  sample_prompts:
+    - "Context:\nConversation:\nUser: Hello! My name is Alice.\nAssistant: Hello Alice! How can I help you today?\n\nInstruction:\nWhat is my name?\n\nResponse:\n"
+    - "Context:\nConversation:\nUser: I have a ginger cat named Whiskers.\nAssistant: Whiskers sounds like a wonderful cat!\n\nInstruction:\nWhat kind of pet do I have?\n\nResponse:\n"
+    - "Instruction:\nWhat is the capital of France?\n\nResponse:\n"
+
+  log_dir: logs/phase5_multiturn_sft
+  log_every_n_steps: 25

@@ -1,0 +1,54 @@
+{
+  "train": {
+    "n_documents": 28398,
+    "total_chars": 31209870,
+    "total_words": 5821495,
+    "estimated_tokens_approx": 5821495,
+    "category_doc_counts": {
+      "encyclopedic": 9958,
+      "reasoning_logic_arithmetic": 7101,
+      "general_text": 11339
+    },
+    "category_char_counts": {
+      "encyclopedic": 12996415,
+      "reasoning_logic_arithmetic": 3368351,
+      "general_text": 14845104
+    },
+    "category_doc_fractions": {
+      "encyclopedic": 0.35065849707725893,
+      "reasoning_logic_arithmetic": 0.2500528206211705,
+      "general_text": 0.39928868230157055
+    },
+    "category_char_fractions": {
+      "encyclopedic": 0.416420029945655,
+      "reasoning_logic_arithmetic": 0.10792582602875309,
+      "general_text": 0.4756541440255919
+    }
+  },
+  "val": {
+    "n_documents": 1494,
+    "total_chars": 1652809,
+    "total_words": 308493,
+    "estimated_tokens_approx": 308493,
+    "category_doc_counts": {
+      "encyclopedic": 504,
+      "general_text": 618,
+      "reasoning_logic_arithmetic": 372
+    },
+    "category_char_counts": {
+      "encyclopedic": 662702,
+      "general_text": 812592,
+      "reasoning_logic_arithmetic": 177515
+    },
+    "category_doc_fractions": {
+      "encyclopedic": 0.3373493975903614,
+      "general_text": 0.41365461847389556,
+      "reasoning_logic_arithmetic": 0.24899598393574296
+    },
+    "category_char_fractions": {
+      "encyclopedic": 0.400954980279028,
+      "general_text": 0.491643015012624,
+      "reasoning_logic_arithmetic": 0.10740200470834803
+    }
+  }
+}

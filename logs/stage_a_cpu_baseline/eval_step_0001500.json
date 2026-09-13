@@ -1,0 +1,118 @@
+{
+  "checkpoint_path": "checkpoints/stage_a/step_0001500.pt",
+  "step": 1500,
+  "val_nll_loss": 5.155124187469482,
+  "val_perplexity": 173.31732177734375,
+  "eval_batches_used": 50,
+  "prompt_results": [
+    {
+      "prompt": "If a train travels at 60 mph for 2 hours, how far does it go?",
+      "generated": "Step-by-step Solution: There are 200*30=1000 miles for the first 20-40 = 1600 people. The total number of minutes to find the total number of minutes as many hours to get for the time and the total number of hours to buy them the first quarter, the total number , 13000 miles to the second year .50-100 = $10000.0000 He has 50000 on the first week. Therefore, the final answer is 6700",
+      "metrics": {
+        "n_words": 71,
+        "n_unique_words": 44,
+        "lexical_diversity": 0.6197183098591549,
+        "repetition_rate_8gram": 0.0,
+        "avg_sentence_length": 14.4,
+        "prompt_topic_overlap": 0.06666666666666667,
+        "flags": {
+          "high_repetition": false,
+          "very_short_output": false,
+          "very_low_diversity": false
+        }
+      }
+    },
+    {
+      "prompt": "What is the logical conclusion if all A are B and all B are C?",
+      "generated": "Step-by-step Solution: The most large-level number of water in the first point is 34-0 = 800 more than 90% + 8000 = 2000 The cost of the number of time by the number of people that is 120000:1005 = 20000 Therefore, the final answer is 61000",
+      "metrics": {
+        "n_words": 46,
+        "n_unique_words": 32,
+        "lexical_diversity": 0.6956521739130435,
+        "repetition_rate_8gram": 0.0,
+        "avg_sentence_length": 46.0,
+        "prompt_topic_overlap": 0.16666666666666666,
+        "flags": {
+          "high_repetition": false,
+          "very_short_output": false,
+          "very_low_diversity": false
+        }
+      }
+    },
+    {
+      "prompt": "Describe the water cycle in simple terms.",
+      "generated": "He went to upon his hand, an hour, which was to make a much of his house and in the country. We have more than the rest of the hand, and he could not have no little as a moment. But, I will be a door as would be the very good of them, and I were not like in this way.",
+      "metrics": {
+        "n_words": 62,
+        "n_unique_words": 43,
+        "lexical_diversity": 0.6935483870967742,
+        "repetition_rate_8gram": 0.0,
+        "avg_sentence_length": 20.666666666666668,
+        "prompt_topic_overlap": 0.2857142857142857,
+        "flags": {
+          "high_repetition": false,
+          "very_short_output": false,
+          "very_low_diversity": false
+        }
+      }
+    },
+    {
+      "prompt": "Write a short paragraph about autumn leaves.",
+      "generated": "The rest was the head of a long, but we had been at the end of his death to come, and he had been in a time to meet them. If the number of people were in the end, and it was the third of the night, for the night, and to end the game was only one.",
+      "metrics": {
+        "n_words": 58,
+        "n_unique_words": 35,
+        "lexical_diversity": 0.603448275862069,
+        "repetition_rate_8gram": 0.0,
+        "avg_sentence_length": 29.0,
+        "prompt_topic_overlap": 0.14285714285714285,
+        "flags": {
+          "high_repetition": false,
+          "very_short_output": false,
+          "very_low_diversity": false
+        }
+      }
+    },
+    {
+      "prompt": "What is 17 multiplied by 13?",
+      "generated": "Step-by-step Solution: The number of friction has 18 * 34 = 10 He has 9/30 = 12 dollars Then that amount to find the total number of cookies: 130 - 11 = 120 Therefore, the final answer is 38",
+      "metrics": {
+        "n_words": 39,
+        "n_unique_words": 32,
+        "lexical_diversity": 0.8205128205128205,
+        "repetition_rate_8gram": 0.0,
+        "avg_sentence_length": 39.0,
+        "prompt_topic_overlap": 0.16666666666666666,
+        "flags": {
+          "high_repetition": false,
+          "very_short_output": false,
+          "very_low_diversity": false
+        }
+      }
+    },
+    {
+      "prompt": "Explain why 1 + 1 = 2 in a mathematical sense.",
+      "generated": "After he turned up, he was already for the way, he had been, he did not pay \u201cI know that he could only believe him--Yy, I will be at your heart!\u201d said, and I thought he will take it with him. She had yet been out at once, I could not be so much more to me. It would be a time again again.",
+      "metrics": {
+        "n_words": 64,
+        "n_unique_words": 49,
+        "lexical_diversity": 0.765625,
+        "repetition_rate_8gram": 0.0,
+        "avg_sentence_length": 16.25,
+        "prompt_topic_overlap": 0.1,
+        "flags": {
+          "high_repetition": false,
+          "very_short_output": false,
+          "very_low_diversity": false
+        }
+      }
+    }
+  ],
+  "summary": {
+    "n_prompts": 6,
+    "mean_repetition_rate": 0.0,
+    "mean_lexical_diversity": 0.6997508278739769,
+    "n_prompts_with_flags": 0
+  },
+  "timestamp": "2026-09-12T10:51:26.649810+00:00"
+}

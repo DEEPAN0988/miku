@@ -1,0 +1,32 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Model checkpoints & large binary weights (exceeds GitHub 100MB file limit)
+checkpoints/
+*.pt
+*.pth
+*.bin
+*.onnx
+
+# Local test databases & scratch files
+*.db
+data/memory/*.db
+scratch/
+
+# Environments & virtualenvs
+.env
+.env.*
+venv/
+.venv/
+env/
+ENV/
+
+# System & IDE artifacts
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log

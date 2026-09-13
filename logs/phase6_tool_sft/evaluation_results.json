@@ -1,0 +1,307 @@
+{
+  "in_distribution": [
+    {
+      "instruction": "What time is it right now?",
+      "expected_action": "Get Time",
+      "expected_arg": "None",
+      "raw_generated": "Action: Get Time Argument: None",
+      "parsed_action": "Get Time",
+      "parsed_argument": "None",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": true,
+      "deterministic_slot": "None",
+      "deterministic_arg_match": true
+    },
+    {
+      "instruction": "What is the current time?",
+      "expected_action": "Get Time",
+      "expected_arg": "None",
+      "raw_generated": "Action: Get Time Argument: None",
+      "parsed_action": "Get Time",
+      "parsed_argument": "None",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": true,
+      "deterministic_slot": "None",
+      "deterministic_arg_match": true
+    },
+    {
+      "instruction": "Open the calculator.",
+      "expected_action": "Open App",
+      "expected_arg": "calculator",
+      "raw_generated": "Action: Open App Argument: basics",
+      "parsed_action": "Open App",
+      "parsed_argument": "basics",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": false,
+      "deterministic_slot": "calculator",
+      "deterministic_arg_match": true
+    },
+    {
+      "instruction": "Launch terminal.",
+      "expected_action": "Open App",
+      "expected_arg": "terminal",
+      "raw_generated": "Action: Open App Argument: terminal",
+      "parsed_action": "Open App",
+      "parsed_argument": "terminal",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": true,
+      "deterministic_slot": "terminal",
+      "deterministic_arg_match": true
+    },
+    {
+      "instruction": "Start the browser app.",
+      "expected_action": "Open App",
+      "expected_arg": "browser",
+      "raw_generated": "Action: Open App Argument: pyth",
+      "parsed_action": "Open App",
+      "parsed_argument": "pyth",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": false,
+      "deterministic_slot": "browser",
+      "deterministic_arg_match": true
+    },
+    {
+      "instruction": "Search the web for weather forecast.",
+      "expected_action": "Search Web",
+      "expected_arg": "weather forecast",
+      "raw_generated": "Action: Search Web Argument: weather terminal",
+      "parsed_action": "Search Web",
+      "parsed_argument": "weather terminal",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": false,
+      "deterministic_slot": "weather forecast",
+      "deterministic_arg_match": true
+    },
+    {
+      "instruction": "Look up python tutorial on the web.",
+      "expected_action": "Search Web",
+      "expected_arg": "python tutorial",
+      "raw_generated": "Action: Search Web Argument: browseron tutorial",
+      "parsed_action": "Search Web",
+      "parsed_argument": "browseron tutorial",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": false,
+      "deterministic_slot": "python tutorial",
+      "deterministic_arg_match": true
+    }
+  ],
+  "ood_phrasings": [
+    {
+      "instruction": "Do you have the time on you?",
+      "expected_action": "Get Time",
+      "expected_arg": "None",
+      "raw_generated": "Action: Get Time Argument: None",
+      "parsed_action": "Get Time",
+      "parsed_argument": "None",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": true,
+      "deterministic_slot": "None",
+      "deterministic_arg_match": true
+    },
+    {
+      "instruction": "Could you check the current time?",
+      "expected_action": "Get Time",
+      "expected_arg": "None",
+      "raw_generated": "Action: Get Time Argument: None",
+      "parsed_action": "Get Time",
+      "parsed_argument": "None",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": true,
+      "deterministic_slot": "None",
+      "deterministic_arg_match": true
+    },
+    {
+      "instruction": "What's the clock saying right now?",
+      "expected_action": "Get Time",
+      "expected_arg": "None",
+      "raw_generated": "Action: Get Time Argument: None",
+      "parsed_action": "Get Time",
+      "parsed_argument": "None",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": true,
+      "deterministic_slot": "None",
+      "deterministic_arg_match": true
+    },
+    {
+      "instruction": "Fire up the calculator.",
+      "expected_action": "Open App",
+      "expected_arg": "calculator",
+      "raw_generated": "Action: Search Web Argument: basics",
+      "parsed_action": "Search Web",
+      "parsed_argument": "basics",
+      "format_valid": true,
+      "action_match": false,
+      "arg_match": false,
+      "deterministic_slot": "calculator",
+      "deterministic_arg_match": true
+    },
+    {
+      "instruction": "Please execute terminal for me.",
+      "expected_action": "Open App",
+      "expected_arg": "terminal",
+      "raw_generated": "Action: Open App Argument: terminal",
+      "parsed_action": "Open App",
+      "parsed_argument": "terminal",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": true,
+      "deterministic_slot": "terminal",
+      "deterministic_arg_match": true
+    },
+    {
+      "instruction": "Can you boot up browser?",
+      "expected_action": "Open App",
+      "expected_arg": "browser",
+      "raw_generated": "Action: Open App Argument: workout",
+      "parsed_action": "Open App",
+      "parsed_argument": "workout",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": false,
+      "deterministic_slot": "browser",
+      "deterministic_arg_match": true
+    },
+    {
+      "instruction": "Do a web search regarding python tutorial.",
+      "expected_action": "Search Web",
+      "expected_arg": "python tutorial",
+      "raw_generated": "Action: Search Web Argument: browseron tutorial",
+      "parsed_action": "Search Web",
+      "parsed_argument": "browseron tutorial",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": false,
+      "deterministic_slot": "python tutorial",
+      "deterministic_arg_match": true
+    },
+    {
+      "instruction": "Search online to find out about weather forecast.",
+      "expected_action": "Search Web",
+      "expected_arg": "weather forecast",
+      "raw_generated": "Action: Search Web Argument: weather terminal",
+      "parsed_action": "Search Web",
+      "parsed_argument": "weather terminal",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": false,
+      "deterministic_slot": "weather forecast",
+      "deterministic_arg_match": true
+    }
+  ],
+  "novel_arguments": [
+    {
+      "instruction": "Open slack.",
+      "expected_action": "Open App",
+      "expected_arg": "slack",
+      "raw_generated": "Action: Open App Argument: clutter",
+      "parsed_action": "Open App",
+      "parsed_argument": "clutter",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": false,
+      "deterministic_slot": "slack",
+      "deterministic_arg_match": true
+    },
+    {
+      "instruction": "Launch spotify.",
+      "expected_action": "Open App",
+      "expected_arg": "spotify",
+      "raw_generated": "Action: Open App Argument: spot",
+      "parsed_action": "Open App",
+      "parsed_argument": "spot",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": false,
+      "deterministic_slot": "spotify",
+      "deterministic_arg_match": true
+    },
+    {
+      "instruction": "Start blender.",
+      "expected_action": "Open App",
+      "expected_arg": "blender",
+      "raw_generated": "Action: Open App Argument: None",
+      "parsed_action": "Open App",
+      "parsed_argument": "None",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": false,
+      "deterministic_slot": "blender",
+      "deterministic_arg_match": true
+    },
+    {
+      "instruction": "Fire up photoshop.",
+      "expected_action": "Open App",
+      "expected_arg": "photoshop",
+      "raw_generated": "Action: Search Web Argument: photosynton",
+      "parsed_action": "Search Web",
+      "parsed_argument": "photosynton",
+      "format_valid": true,
+      "action_match": false,
+      "arg_match": false,
+      "deterministic_slot": "photoshop",
+      "deterministic_arg_match": true
+    },
+    {
+      "instruction": "Search the web for quantum computing papers.",
+      "expected_action": "Search Web",
+      "expected_arg": "quantum computing papers",
+      "raw_generated": "Action: Search Web Argument: local",
+      "parsed_action": "Search Web",
+      "parsed_argument": "local",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": false,
+      "deterministic_slot": "quantum computing papers",
+      "deterministic_arg_match": true
+    },
+    {
+      "instruction": "Look up mars rover latest photos.",
+      "expected_action": "Search Web",
+      "expected_arg": "mars rover latest photos",
+      "raw_generated": "Action: Search Web Argument: tips",
+      "parsed_action": "Search Web",
+      "parsed_argument": "tips",
+      "format_valid": true,
+      "action_match": true,
+      "arg_match": false,
+      "deterministic_slot": "mars rover latest photos",
+      "deterministic_arg_match": true
+    }
+  ],
+  "conversational_retention": [
+    {
+      "instruction": "What is the capital of France?",
+      "category": "QA",
+      "raw_generated": "The capital of France is the capital",
+      "hallucinated_tool": false
+    },
+    {
+      "instruction": "Who wrote Romeo and Juliet?",
+      "category": "QA",
+      "raw_generated": "The Name of Shakespeare is the 19th-oldest-Alier.",
+      "hallucinated_tool": false
+    },
+    {
+      "instruction": "Hello! How are you doing today?",
+      "category": "Greeting",
+      "raw_generated": "You can do today.",
+      "hallucinated_tool": false
+    },
+    {
+      "instruction": "Can you summarize what plants need to grow?",
+      "category": "Explanation",
+      "raw_generated": "Action: Search Web Argument: plants need to be plant",
+      "hallucinated_tool": true
+    }
+  ]
+}
