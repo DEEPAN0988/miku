@@ -10,3 +10,4 @@ All autonomous and pair-programming agents working in this repository MUST stric
 4. **From-Scratch Integrity**: Real transformer and algorithm implementations.
 5. **Hardware-Aware & Lightweight**: Measure before optimizing. Detect hardware constraints dynamically.
 6. **Test Everything & Never Delete Tests**: Keep standing regression and integration suites active.
+7. **Continuous GitHub Sync**: Keep remote repository DEEPAN0988/miku automatically updated after each session or file modification.
