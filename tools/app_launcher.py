@@ -199,20 +199,53 @@ def find_direct_game_binary(launcher_path: str) -> Optional[str]:
     return None
 
 
-def _verify_process_alive(target: str, min_duration: float = 1.0) -> bool:
+def _verify_process_alive(
+    target: str,
+    min_duration: float = 0.5,
+    expected_image: Optional[str] = None,
+    timeout: Optional[float] = None,
+) -> bool:
     """
     Verifies if a process matching target image name is actively running in tasklist
     and remains alive after a stabilization duration.
     """
-    base_name = os.path.basename(target).lower()
-    time.sleep(min_duration)
-    try:
-        res = subprocess.run(["tasklist", "/fi", f"IMAGENAME eq {base_name}"], capture_output=True, text=True, timeout=2)
-        lines = [line for line in res.stdout.splitlines() if base_name in line.lower()]
-        return len(lines) > 0 and "info: no tasks" not in res.stdout.lower()
-    except Exception:
-        return False
+    wait_time = timeout if timeout is not None else min_duration
+    if wait_time > 0:
+        time.sleep(wait_time)
 
+    base_name = os.path.basename(target).lower()
+    images_to_check = {base_name}
+    if expected_image:
+        images_to_check.add(os.path.basename(expected_image).lower())
+
+    ALIAS_MAP = {
+        "calc.exe": "calculatorapp.exe",
+        "calc": "calculatorapp.exe",
+        "calculator.exe": "calculatorapp.exe",
+        "calculator": "calculatorapp.exe",
+        "mspaint.exe": "mspaint.exe",
+        "control.exe": "explorer.exe",
+    }
+    for alias_k, alias_v in ALIAS_MAP.items():
+        if alias_k in images_to_check:
+            images_to_check.add(alias_v)
+
+    if base_name.endswith(".msc"):
+        images_to_check.add("mmc.exe")
+
+    try:
+        res = subprocess.run(["tasklist", "/fo", "csv", "/nh"], capture_output=True, text=True, timeout=3)
+        if res.returncode == 0:
+            for line in res.stdout.splitlines():
+                parts = [p.strip('"') for p in line.split('","')]
+                if parts:
+                    proc_name = parts[0].lower()
+                    for img in images_to_check:
+                        if img and (proc_name == img or proc_name == f"{img}.exe"):
+                            return True
+    except Exception:
+        pass
+    return False
 
 
 def launch_app(app_name: str, max_retries: int = 3, retry_delay: float = 0.5) -> Dict[str, Any]:
@@ -230,33 +263,59 @@ def launch_app(app_name: str, max_retries: int = 3, retry_delay: float = 0.5) ->
     else:
         resolved_name, target = res
 
+    original_target = target
     working_dir: Optional[str] = None
+    shortcut_args: Optional[str] = None
+    target_exe: str = target
+
     # Unwrap .lnk shortcut target if applicable
     if target.lower().endswith(".lnk") and os.path.exists(target):
         try:
             import win32com.client
             sh = win32com.client.Dispatch("WScript.Shell")
             sc = sh.CreateShortcut(target)
-            if sc.TargetPath and os.path.exists(sc.TargetPath):
-                working_dir = sc.WorkingDirectory if (sc.WorkingDirectory and os.path.exists(sc.WorkingDirectory)) else os.path.dirname(sc.TargetPath)
-                target = sc.TargetPath
+            if sc.TargetPath:
+                target_exe = sc.TargetPath
+                shortcut_args = sc.Arguments
+                if sc.WorkingDirectory and os.path.exists(sc.WorkingDirectory):
+                    working_dir = sc.WorkingDirectory
+                elif os.path.isabs(target_exe):
+                    working_dir = os.path.dirname(target_exe)
         except Exception:
             pass
 
-    if not working_dir and os.path.isabs(target):
-        working_dir = os.path.dirname(target)
+    if not working_dir and os.path.isabs(target_exe):
+        working_dir = os.path.dirname(target_exe)
 
     # Check for direct game binary if target is a launcher
-    direct_game_binary = find_direct_game_binary(target)
-    candidates = [target]
-    if direct_game_binary and direct_game_binary not in candidates:
-        candidates.append(direct_game_binary)
+    direct_game_binary = find_direct_game_binary(target_exe)
+
+    # Tier 1 candidates: If original target is a .lnk, prioritize launching the .lnk
+    # because Windows Shell natively resolves all shortcut parameters and working directories.
+    tier1_candidates = []
+    if original_target.lower().endswith(".lnk") and os.path.exists(original_target):
+        tier1_candidates.append(original_target)
+    if target_exe and target_exe not in tier1_candidates:
+        tier1_candidates.append(target_exe)
+    if direct_game_binary and direct_game_binary not in tier1_candidates:
+        tier1_candidates.append(direct_game_binary)
+
+    # Execution candidates for direct process invocation (Tier 2)
+    tier2_candidates = []
+    if direct_game_binary:
+        tier2_candidates.append(direct_game_binary)
+    if target_exe and target_exe.lower().endswith(".exe"):
+        tier2_candidates.append(target_exe)
+    if not tier2_candidates and tier1_candidates:
+        tier2_candidates.extend(tier1_candidates)
+
+    expected_img = os.path.basename(target_exe).lower() if target_exe else None
 
     # Tier 1: Direct execution via os.startfile with process verification
-    for cand in candidates:
+    for cand in tier1_candidates:
         try:
             os.startfile(cand)
-            if _verify_process_alive(cand, timeout=1.2):
+            if _verify_process_alive(cand, min_duration=0.8, expected_image=expected_img):
                 return {
                     "status": "SUCCESS",
                     "mode": "DIRECT_STARTFILE",
@@ -271,14 +330,23 @@ def launch_app(app_name: str, max_retries: int = 3, retry_delay: float = 0.5) ->
             pass
 
     # Tier 2: Application Compatibility Layer (RunAsInvoker shim)
-    for cand in candidates:
+    import shlex
+    for cand in tier2_candidates:
+        if not cand.lower().endswith(".exe") and not os.path.isfile(cand):
+            continue
         cand_wd = os.path.dirname(cand) if os.path.isabs(cand) else working_dir
+        cmd = [cand]
+        if shortcut_args and cand == target_exe:
+            try:
+                cmd.extend(shlex.split(shortcut_args))
+            except Exception:
+                pass
         for _ in range(max_retries):
             try:
                 env = os.environ.copy()
                 env["__COMPAT_LAYER"] = "RunAsInvoker"
-                p = subprocess.Popen([cand], cwd=cand_wd, env=env)
-                if _verify_process_alive(cand, min_duration=1.2) and p.poll() is None:
+                p = subprocess.Popen(cmd, cwd=cand_wd, env=env)
+                if _verify_process_alive(cand, min_duration=0.8, expected_image=expected_img) and p.poll() is None:
                     return {
                         "status": "SUCCESS",
                         "mode": "COMPAT_RUNASINVOKER",
@@ -289,7 +357,6 @@ def launch_app(app_name: str, max_retries: int = 3, retry_delay: float = 0.5) ->
                     }
             except Exception:
                 pass
-
 
     # Tier 3: Task Scheduler Bridge via launch_elevated_app
     try:
