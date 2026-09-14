@@ -12,15 +12,20 @@ if %errorlevel% neq 0 (
 echo ===================================================
 echo Registering Miku Elevated Task for Wuthering Waves
 echo ===================================================
-schtasks /create /tn "Miku_Elevated_wuthering_waves" /tr "\"\"C:\Program Files\Wuthering Waves\launcher.exe\"\"" /sc ONCE /st 00:00 /rl HIGHEST /f
+
+:: Delete existing task if present
+schtasks /delete /tn "Miku_Elevated_wuthering_waves" /f >nul 2>&1
+
+:: Register with exact Game .exe and Working Directory via PowerShell
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$action = New-ScheduledTaskAction -Execute 'C:\Program Files\Wuthering Waves\Wuthering Waves Game\Wuthering Waves.exe' -WorkingDirectory 'C:\Program Files\Wuthering Waves\Wuthering Waves Game'; $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest; Register-ScheduledTask -TaskName 'Miku_Elevated_wuthering_waves' -Action $action -Principal $principal -Force"
+
 echo.
 if %errorlevel% neq 0 (
     echo [ERROR] Task registration failed.
 ) else (
-    echo [SUCCESS] Task created successfully!
+    echo [SUCCESS] Task created successfully with WorkingDirectory configured!
     echo Launching Wuthering Waves via task...
     schtasks /run /tn "Miku_Elevated_wuthering_waves"
 )
 echo.
 pause
-
