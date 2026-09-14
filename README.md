@@ -638,12 +638,64 @@ Phase 14 delivers two key architectural expansions to complete full-spectrum des
 - **Native Win32 Edit Control Circuit Breaker**: Spawns in-process native Windows `EDIT` control, stages text, and proves `dispatch_real_typing` is blocked (`DRY_RUN_PENDING_CIRCUIT_BREAKER`) with zero physical keystrokes dispatched.
 - **Results**: 3/3 tests passed in 2.13s.
 
+
 ### 4. Standing Triple Safety Circuit Breakers State
 | Subsystem | Circuit Breaker Flag | Default State | Human Confirmation Phrase |
 | :--- | :--- | :--- | :--- |
 | **Messaging Automation** | `tools.messaging.REAL_SEND_ENABLED` | `False` (Locked) | `"CONFIRM SEND"` |
 | **Mouse Click Dispatch** | `tools.screen_inspector.REAL_CLICK_ENABLED` | `False` (Locked) | `"CONFIRM CLICK"` |
 | **Keyboard Keystroke Dispatch** | `tools.typing_automation.REAL_TYPE_ENABLED` | `False` (Locked) | `"CONFIRM TYPE"` |
+
+---
+
+## v0.3 Desktop Orchestration & Automation Architecture
+
+### 1. Compound Action Engine (`tools/orchestrator.py`)
+- **Autonomous Multi-Step Pipeline**:
+  - Chains primitive desktop tools: `PLAN` $\to$ `FOCUS_APP` $\to$ `INSPECT_UI` $\to$ `GROUND_COORDINATE` $\to$ `CLICK` $\to$ `TYPE` $\to$ `AUDIT` $\to$ `COMPLETE`.
+- **Fail-Safe Yielding**:
+  - Implements a resilient state machine. If an element is missing, occluded, unclickable, non-editable, or payload malformed, the pipeline transitions cleanly to `YIELD_TO_ROUTER` with structured telemetry rather than throwing unhandled exceptions.
+- **Verification**: Evaluated via [`eval/test_orchestrator.py`](file:///c:/miku/eval/test_orchestrator.py) (10/10 tests passed).
+
+### 2. Multi-Turn Messaging Loop (`tools/messaging.py`)
+- **Interactive Clarification**:
+  - Automatically transitions to `INTERACTIVE_CLARIFICATION` when a message command lacks a payload (e.g. *"Message Aravind"*), halting execution and prompting: *"What would you like to send to Aravind?"*.
+- **Extensible Messaging Abstraction**:
+  - Introduces `MessagingClientInterface` with modular implementations for `WhatsAppDesktopClient`, `TelegramClient`, and `DiscordClient`.
+  - Managed by `MultiTurnMessagingSession` maintaining multi-turn conversational state and contact lookup.
+- **Verification**: Evaluated via [`eval/test_multi_turn_messaging.py`](file:///c:/miku/eval/test_multi_turn_messaging.py) (9/9 tests passed).
+
+### 3. Safe File Lifecycle & Recycle Bin (`tools/file_lifecycle.py`)
+- **Zero Permanent Delete Guarantee**:
+  - Wraps native Win32 `win32com.shell.shell.SHFileOperation` with `FO_DELETE` and `FOF_ALLOWUNDO`.
+  - Mandates double-null terminated, fully-qualified Windows file paths.
+  - Deletions route strictly to the Windows Recycle Bin, preventing catastrophic data loss.
+- **Verification**: Evaluated via [`eval/test_file_lifecycle.py`](file:///c:/miku/eval/test_file_lifecycle.py) (6/6 tests passed).
+
+### 4. Smart Resource Fetcher (`tools/resource_fetcher.py`)
+- **Entity Classification & Dispatch**:
+  - Classifies resource requests into `APPLICATION`, `DATASET`, `DOCUMENT`, or `MEDIA`.
+  - Applications query Windows Package Manager (`winget search <query>`).
+  - Datasets, documents, and media format targeted web search queries dispatched to the default browser.
+- **Download Monitoring**:
+  - Real-time polling on OS `Downloads` folder using `os.path.getmtime` and temporary extension detection (`.crdownload`, `.part`, `.tmp`) to confirm completion.
+- **Verification**: Evaluated via [`eval/test_resource_fetcher.py`](file:///c:/miku/eval/test_resource_fetcher.py) (7/7 tests passed).
+
+### 5. Local Credential Vault (`tools/credential_vault.py`)
+- **Native Windows Credential Manager**:
+  - Secure integration using `win32cred.CredRead` and `win32cred.CredWrite` (`CRED_TYPE_GENERIC`, `CRED_PRESERVE_CREDENTIAL_BLOB`).
+- **Zero Plaintext Exposure**:
+  - `VaultSecret` wraps secret bytes/strings and strictly redacts contents in `__repr__` and `__str__` (`***REDACTED***`).
+  - Plaintext is accessible only via `secret.expose()` in tool memory space, never leaking into chat logs or exception messages.
+- **Verification**: Evaluated via [`eval/test_credential_vault.py`](file:///c:/miku/eval/test_credential_vault.py) (4/4 tests passed).
+
+### 6. Ordinal Grounding & Context-Aware Media Routing (`tools/vision_grounder.py`, `tools/dispatcher.py`)
+- **Geometric Ordinal Grounding**:
+  - Sorts detected UI elements top-to-bottom and left-to-right (reading order) and grounds queries like *"click the 3rd video"*.
+- **Media Disambiguation**:
+  - Halts queries like *"Play Pokemon"* to prompt the user: *"Did you mean to search local files, YouTube videos, or YouTube Shorts?"*.
+- **Verification**: Evaluated via [`eval/test_ordinal_and_media_routing.py`](file:///c:/miku/eval/test_ordinal_and_media_routing.py) (8/8 tests passed).
+
 
 
 

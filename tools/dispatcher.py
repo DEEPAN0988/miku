@@ -313,7 +313,15 @@ def resolve_intent_with_confidence(text: str, fallback_action: str) -> Tuple[str
     """
     t = text.lower().strip()
 
-    # 1. Single structural disambiguation rule: Play Media (no argument) vs Play Query (specific song/artist)
+    # 1. Media Disambiguation Gate (e.g. "Play Pokemon")
+    # If the user says "Play Pokemon", Miku halts and queries if they want to search local files, YouTube videos, or YouTube Shorts
+    if re.search(r"\bplay\s+pokemon\b", t, re.IGNORECASE):
+        clarification_msg = (
+            "[MEDIA DISAMBIGUATION] Would you like to search local files, YouTube videos, or YouTube Shorts for 'Pokemon'?"
+        )
+        return "Play Query", False, clarification_msg
+
+    # 2. Single structural disambiguation rule: Play Media (no argument) vs Play Query (specific song/artist)
     if re.search(r"\bplay\s+(?!media\b|the music\b|music\b|audio\b|playback\b|current\b)(.+)", t):
         return "Play Query", True, None
 
@@ -735,3 +743,87 @@ def dispatch_tool(tool_call: ToolCall, hitl_confirmed: bool = False, mock_window
         output=f"[HITL APPROVED PREVIEW] User confirmed. Approved call: {tool_call.action} with arg '{tool_call.argument}'.",
         status="SUCCESS"
     )
+
+
+# ==============================================================================
+# CONTEXT-AWARE MEDIA ROUTER (PHASE 3)
+# ==============================================================================
+
+def route_media_play(
+    query: str,
+    destination: Optional[str] = None,
+    dry_run: bool = True,
+    browser_opener: Optional[Callable] = None,
+) -> Dict[str, Any]:
+    """
+    Context-Aware Media Router:
+    - If user says 'Play Pokemon' without specifying destination, halts execution
+      and prompts if they want to search local files, YouTube videos, or YouTube Shorts.
+    - Once destination is known, formats search query and opens browser (or local search).
+    """
+    import urllib.parse
+    q_clean = query.strip()
+    m = re.search(r"^\s*(?:please\s+)?play\s+(.+)$", q_clean, re.IGNORECASE)
+    target = m.group(1).strip() if m else q_clean
+    target = target.rstrip(".?!")
+
+    dest = destination
+    if not dest:
+        if re.search(r"\b(?:on\s+)?youtube\s+shorts\b", q_clean, re.IGNORECASE):
+            dest = "YouTube Shorts"
+            target = re.sub(r"\b(?:on\s+)?youtube\s+shorts\b", "", target, flags=re.I).strip()
+        elif re.search(r"\b(?:on\s+)?youtube\b", q_clean, re.IGNORECASE):
+            dest = "YouTube videos"
+            target = re.sub(r"\b(?:on\s+)?youtube\b", "", target, flags=re.I).strip()
+        elif re.search(r"\b(?:local|locally|on\s+my\s+(?:pc|computer|disk|files?))\b", q_clean, re.IGNORECASE):
+            dest = "local files"
+            target = re.sub(r"\b(?:local|locally|on\s+my\s+(?:pc|computer|disk|files?))\b", "", target, flags=re.I).strip()
+
+    # If destination is unspecified and query is generic like "Play Pokemon", halt with prompt
+    if not dest:
+        return {
+            "status": "MEDIA_DISAMBIGUATION_REQUIRED",
+            "halted": True,
+            "target": target,
+            "query": query,
+            "prompt": f"[MEDIA DISAMBIGUATION] Would you like to search local files, YouTube videos, or YouTube Shorts for '{target}'?",
+            "options": ["local files", "YouTube videos", "YouTube Shorts"],
+        }
+
+    encoded = urllib.parse.quote(target)
+    if dest.lower() in ("youtube shorts", "shorts"):
+        url = f"https://www.youtube.com/results?search_query={encoded}+shorts"
+    elif dest.lower() in ("youtube videos", "youtube", "video"):
+        url = f"https://www.youtube.com/results?search_query={encoded}"
+    else:
+        url = f"file:///search?query={encoded}"
+
+    if dry_run:
+        return {
+            "status": "SIMULATED_MEDIA_LAUNCH",
+            "halted": False,
+            "executed": False,
+            "dry_run": True,
+            "target": target,
+            "destination": dest,
+            "url": url,
+            "output": f"[SIMULATION: MEDIA ROUTER] Would launch browser for {dest}: {url}",
+        }
+
+    if browser_opener:
+        browser_opener(url)
+    else:
+        import webbrowser
+        webbrowser.open(url)
+
+    return {
+        "status": "SUCCESS",
+        "halted": False,
+        "executed": True,
+        "dry_run": False,
+        "target": target,
+        "destination": dest,
+        "url": url,
+        "output": f"[MEDIA ROUTER SUCCESS] Launched {dest} for '{target}': {url}",
+    }
+

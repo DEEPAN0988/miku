@@ -17,8 +17,9 @@ from __future__ import annotations
 
 import ctypes
 from ctypes import wintypes
+import re
 import time
-from typing import Any, Dict, List, Optional, Tuple, Set
+from typing import Any, Callable, Dict, List, Optional, Tuple, Set
 
 import cv2
 import numpy as np
@@ -337,3 +338,194 @@ def inspect_screen_with_vision_fallback(
         latency_ms=latency,
         error=None,
     )
+
+
+# ==============================================================================
+# ORDINAL GROUNDING & GEOMETRIC READING-ORDER SORTING (PHASE 3)
+# ==============================================================================
+
+ORDINAL_MAP: Dict[str, int] = {
+    "first": 1, "1st": 1,
+    "second": 2, "2nd": 2,
+    "third": 3, "3rd": 3,
+    "fourth": 4, "4th": 4,
+    "fifth": 5, "5th": 5,
+    "sixth": 6, "6th": 6,
+    "seventh": 7, "7th": 7,
+    "eighth": 8, "8th": 8,
+    "ninth": 9, "9th": 9,
+    "tenth": 10, "10th": 10,
+    "last": -1,
+}
+
+
+def sort_elements_reading_order(
+    elements: List[Any],
+    row_tolerance_px: int = 20,
+) -> List[Any]:
+    """
+    Sorts UI elements in natural reading order: top-to-bottom, left-to-right.
+
+    Algorithm:
+      1. Extract bounding box (left, top, right, bottom) for each element.
+      2. Group elements whose vertical top coordinate falls within `row_tolerance_px`
+         of the current row baseline into the same horizontal band.
+      3. Sort each row horizontally (left-to-right, ascending left coordinate).
+      4. Order rows vertically (top-to-bottom, ascending top coordinate).
+      5. Flatten into a sequentially ordered list.
+    """
+    if not elements:
+        return []
+
+    def get_coords(el: Any) -> Tuple[int, int, int, int]:
+        if hasattr(el, "rect"):
+            return el.rect
+        elif isinstance(el, dict) and "rect" in el:
+            return tuple(el["rect"])
+        elif isinstance(el, (tuple, list)) and len(el) == 4:
+            return tuple(el)
+        return (0, 0, 0, 0)
+
+    # First pass: sort all elements primarily by top ascending, then left ascending
+    sorted_by_top = sorted(elements, key=lambda e: (get_coords(e)[1], get_coords(e)[0]))
+
+    rows: List[List[Any]] = []
+    for el in sorted_by_top:
+        left, top, right, bottom = get_coords(el)
+        if not rows:
+            rows.append([el])
+        else:
+            row_baseline_top = get_coords(rows[-1][0])[1]
+            if abs(top - row_baseline_top) <= row_tolerance_px:
+                rows[-1].append(el)
+            else:
+                rows.append([el])
+
+    # Within each row, sort left-to-right
+    result: List[Any] = []
+    for row in rows:
+        row_sorted = sorted(row, key=lambda e: get_coords(e)[0])
+        result.extend(row_sorted)
+
+    return result
+
+
+def parse_ordinal_from_query(query: str) -> Optional[int]:
+    """
+    Extracts 1-based ordinal index from a query string (e.g. 'click the 3rd video' -> 3).
+    Returns -1 for 'last'. Returns None if no ordinal expression is matched.
+    """
+    # Check numeric ordinals like 1st, 2nd, 3rd, 4th, 10th
+    num_match = re.search(r"\b([0-9]+)(?:st|nd|rd|th)\b", query, re.IGNORECASE)
+    if num_match:
+        return int(num_match.group(1))
+
+    # Check word ordinals like first, second, third, etc.
+    words = query.lower().split()
+    for w in words:
+        clean_w = re.sub(r"[^\w]", "", w)
+        if clean_w in ORDINAL_MAP:
+            return ORDINAL_MAP[clean_w]
+
+    return None
+
+
+def select_ordinal_element(
+    elements: List[Any],
+    ordinal: int,
+    filter_label: Optional[str] = None,
+    row_tolerance_px: int = 20,
+) -> Optional[Any]:
+    """
+    Filters elements (optional), geometrically sorts them in reading order
+    (top-to-bottom, left-to-right), and returns the element at the 1-based ordinal index.
+    Returns None if the ordinal index is out of bounds or no matching elements exist.
+    """
+    if not elements:
+        return None
+
+    filtered = elements
+    if filter_label:
+        f_low = filter_label.lower().strip()
+        filtered = []
+        for el in elements:
+            name = getattr(el, "name", "")
+            if isinstance(el, dict):
+                name = el.get("name", "")
+            c_type = getattr(el, "control_type", "")
+            if isinstance(el, dict):
+                c_type = el.get("control_type", "")
+
+            # Match label or control type substring
+            if f_low in str(name).lower() or f_low in str(c_type).lower():
+                filtered.append(el)
+
+    if not filtered:
+        return None
+
+    sorted_els = sort_elements_reading_order(filtered, row_tolerance_px=row_tolerance_px)
+
+    if ordinal == -1:
+        return sorted_els[-1]
+    elif 1 <= ordinal <= len(sorted_els):
+        return sorted_els[ordinal - 1]
+    else:
+        return None
+
+
+def ground_ordinal_query(
+    query: str,
+    elements: List[Any],
+    default_filter: Optional[str] = None,
+    row_tolerance_px: int = 20,
+) -> Dict[str, Any]:
+    """
+    High-level ordinal grounding API for natural language commands like:
+      "click the 3rd video", "select the second button", "click the first item"
+    """
+    ordinal = parse_ordinal_from_query(query)
+    if ordinal is None:
+        return {
+            "status": "NO_ORDINAL_DETECTED",
+            "found": False,
+            "element": None,
+            "query": query,
+        }
+
+    # Extract target entity/noun from query (e.g. "video", "button", "result", "link")
+    noun_match = re.search(
+        r"\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|[0-9]+(?:st|nd|rd|th)|last)\s+([a-zA-Z0-9_\-]+)",
+        query,
+        re.IGNORECASE,
+    )
+    filter_label = default_filter
+    if noun_match:
+        cand = noun_match.group(1).lower().strip()
+        if cand not in ("one", "item", "element", "thing", "result"):
+            filter_label = cand
+
+    selected = select_ordinal_element(
+        elements,
+        ordinal=ordinal,
+        filter_label=filter_label,
+        row_tolerance_px=row_tolerance_px,
+    )
+
+    if selected is None and filter_label:
+        # Fallback to selection without label filter if no elements matched label
+        selected = select_ordinal_element(
+            elements,
+            ordinal=ordinal,
+            filter_label=None,
+            row_tolerance_px=row_tolerance_px,
+        )
+
+    found = selected is not None
+    return {
+        "status": "SUCCESS" if found else "ORDINAL_OUT_OF_BOUNDS",
+        "found": found,
+        "ordinal": ordinal,
+        "filter_label": filter_label,
+        "element": selected,
+        "query": query,
+    }

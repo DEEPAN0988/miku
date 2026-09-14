@@ -22,12 +22,14 @@ SAFETY INCIDENT REMEDIATION SPECIFICATION:
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+from enum import Enum
 import os
 import re
 import sys
 import time
 import urllib.parse
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from tools.ui_verifier import verify_chat_ui_target
 
@@ -82,6 +84,14 @@ def format_dictated_text(raw_text: str, recipient: Optional[str] = None) -> str:
             names.append(parts[0])
 
     for name in names:
+        bare_recip_pat = (
+            r"^(?:(?:please\s+)?(?:send|tell|message|text|ping|write)(?:\s+(?:a\s+)?message)?(?:\s+to)?)\s+"
+            + re.escape(name)
+            + r"\s*$"
+        )
+        if re.search(bare_recip_pat, t, flags=re.IGNORECASE):
+            return ""
+
         recip_pat = (
             r"^(?:(?:please\s+)?(?:send|tell|message|text|ping|write)(?:\s+(?:a\s+)?message)?(?:\s+to)?)\s+"
             + re.escape(name)
@@ -94,6 +104,11 @@ def format_dictated_text(raw_text: str, recipient: Optional[str] = None) -> str:
             rem_clean = re.sub(preamble, "", remainder, flags=re.IGNORECASE).strip()
             cleaned = rem_clean if rem_clean else remainder
             break
+
+    generic_bare_pat = r"^(?:(?:please\s+)?(?:send|tell|message|text|ping|write)(?:\s+(?:a\s+)?message)?(?:\s+to)?)\s+[a-zA-Z0-9_\-]+(?:\s+[a-zA-Z0-9_\-]+)?\s*$"
+    if re.search(generic_bare_pat, t, flags=re.IGNORECASE):
+        if not cleaned:
+            return ""
 
     if not cleaned or cleaned == text:
         generic_pat = r"^(?:(?:please\s+)?(?:send|tell|message|text|ping|write)(?:\s+(?:a\s+)?message)?(?:\s+to)?)\s+[a-zA-Z0-9_\-\s]+?\s+(?:that|saying\s+that|saying|asking\s+if|asking|about|(?:hey|hi|hello|please)\s+(?=\S))\s*"
@@ -215,8 +230,9 @@ def parse_messaging_intent(
 
     # 4. Extract and reformat message body
     formatted_body = format_dictated_text(q, recipient=resolved_contact)
+    is_message_empty = (len(formatted_body.strip()) == 0)
 
-    # 5. Build clarification prompts if ambiguous
+    # 5. Build clarification prompts if ambiguous or missing body
     clarification_prompt = None
     if is_contact_ambiguous:
         names_str = ", ".join(f"'{c}'" for c in matching_contacts)
@@ -230,6 +246,8 @@ def parse_messaging_intent(
             f"[APP AMBIGUITY DETECTED] Multiple messaging applications mentioned: {apps_str}. "
             f"Please clarify which app you would like to send through."
         )
+    elif is_message_empty:
+        clarification_prompt = "What would you like to send?"
 
     return {
         "app": target_app,
@@ -238,7 +256,8 @@ def parse_messaging_intent(
         "matching_contacts": matching_contacts,
         "is_contact_ambiguous": is_contact_ambiguous,
         "is_app_ambiguous": is_app_ambiguous,
-        "is_ambiguous": (is_contact_ambiguous or is_app_ambiguous),
+        "is_message_empty": is_message_empty,
+        "is_ambiguous": (is_contact_ambiguous or is_app_ambiguous or is_message_empty),
         "clarification_prompt": clarification_prompt,
         "formatted_message": formatted_body,
     }
@@ -521,4 +540,653 @@ def send_whatsapp_message(
             "recipient": recipient,
             "text": text,
             "output": f"[ERROR] Failed during real message dispatch: {e}"
+        }
+
+
+# ==============================================================================
+# MESSAGING CLIENT ABSTRACTIONS & CLIENT REGISTRY
+# ==============================================================================
+
+class MessagingClientInterface(ABC):
+    """Abstract base class for messaging application automation adapters."""
+
+    @property
+    @abstractmethod
+    def app_name(self) -> str:
+        """Identifier name of the application (e.g. 'whatsapp', 'telegram', 'discord')."""
+        pass
+
+    @abstractmethod
+    def stage_message(
+        self,
+        recipient: str,
+        text: str,
+        dry_run: bool = True,
+        mock_window_state: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Stages message content in the application target window."""
+        pass
+
+    @abstractmethod
+    def send_message(
+        self,
+        recipient: str,
+        text: str,
+        dry_run: bool = True,
+        mock_window_state: Optional[Dict[str, Any]] = None,
+        interactive_confirmed: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """Dispatches message with mandatory safety gating, UI verification, and circuit breaker."""
+        pass
+
+
+class WhatsAppDesktopClient(MessagingClientInterface):
+    """Adapter for WhatsApp Desktop automation."""
+
+    @property
+    def app_name(self) -> str:
+        return "whatsapp"
+
+    def stage_message(
+        self,
+        recipient: str,
+        text: str,
+        dry_run: bool = True,
+        mock_window_state: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        return stage_whatsapp_message(recipient, text, dry_run=dry_run, mock_window_state=mock_window_state)
+
+    def send_message(
+        self,
+        recipient: str,
+        text: str,
+        dry_run: bool = True,
+        mock_window_state: Optional[Dict[str, Any]] = None,
+        interactive_confirmed: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        return send_whatsapp_message(
+            recipient,
+            text,
+            dry_run=dry_run,
+            mock_window_state=mock_window_state,
+            interactive_confirmed=interactive_confirmed,
+        )
+
+
+class TelegramClient(MessagingClientInterface):
+    """Adapter for Telegram Desktop automation."""
+
+    @property
+    def app_name(self) -> str:
+        return "telegram"
+
+    def stage_message(
+        self,
+        recipient: str,
+        text: str,
+        dry_run: bool = True,
+        mock_window_state: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        username = recipient.lstrip("@").strip()
+        encoded_text = urllib.parse.quote(text)
+        uri = f"tg://resolve?domain={username}&text={encoded_text}" if username else f"tg://msg?text={encoded_text}"
+        ui_verif = verify_chat_ui_target("telegram", recipient, mock_window_state=mock_window_state)
+
+        if dry_run:
+            return {
+                "status": "SIMULATED_STAGE",
+                "app": "telegram",
+                "executed": False,
+                "dry_run": True,
+                "uri": uri,
+                "recipient": recipient,
+                "staged_text": text,
+                "target_verification": ui_verif,
+                "output": (
+                    f"[SIMULATED STAGING] Generated Telegram URI '{uri}' for recipient '{recipient}' with text: \"{text}\". "
+                    f"Target verification: {ui_verif['status']}."
+                ),
+            }
+
+        if not REAL_SEND_ENABLED:
+            return {
+                "status": "CIRCUIT_BREAKER_BLOCKED",
+                "app": "telegram",
+                "executed": False,
+                "dry_run": True,
+                "recipient": recipient,
+                "staged_text": text,
+                "target_verification": ui_verif,
+                "output": "[CIRCUIT BREAKER BLOCKED] Real execution is disabled in code (REAL_SEND_ENABLED=False).",
+            }
+
+        if not ui_verif["verified"]:
+            return {
+                "status": ui_verif["status"],
+                "app": "telegram",
+                "executed": False,
+                "dry_run": False,
+                "recipient": recipient,
+                "staged_text": text,
+                "target_verification": ui_verif,
+                "output": f"[SAFETY ABORT] {ui_verif['reason']}",
+            }
+
+        import win32clipboard
+        import win32con
+        prior_clipboard = None
+        try:
+            win32clipboard.OpenClipboard()
+            if win32clipboard.IsClipboardFormatAvailable(win32con.CF_UNICODETEXT):
+                prior_clipboard = win32clipboard.GetClipboardData(win32con.CF_UNICODETEXT)
+            win32clipboard.EmptyClipboard()
+            win32clipboard.SetClipboardText(text, win32con.CF_UNICODETEXT)
+        finally:
+            try:
+                win32clipboard.CloseClipboard()
+            except Exception:
+                pass
+
+        from tools.app_launcher import focus_app
+        focus_app("telegram")
+        time.sleep(0.5)
+
+        import ctypes
+        user32 = ctypes.windll.user32
+        user32.keybd_event(0x11, 0, 0, 0)
+        user32.keybd_event(0x56, 0, 0, 0)
+        user32.keybd_event(0x56, 0, 2, 0)
+        user32.keybd_event(0x11, 0, 2, 0)
+        time.sleep(0.5)
+
+        if prior_clipboard is not None:
+            try:
+                win32clipboard.OpenClipboard()
+                win32clipboard.EmptyClipboard()
+                win32clipboard.SetClipboardText(prior_clipboard, win32con.CF_UNICODETEXT)
+                win32clipboard.CloseClipboard()
+            except Exception:
+                pass
+
+        return {
+            "status": "SUCCESS",
+            "app": "telegram",
+            "executed": True,
+            "dry_run": False,
+            "uri": uri,
+            "recipient": recipient,
+            "staged_text": text,
+            "target_verification": ui_verif,
+            "output": f"[REAL STAGING SUCCESS] Staged message for '{recipient}' in Telegram Desktop: \"{text}\"",
+        }
+
+    def send_message(
+        self,
+        recipient: str,
+        text: str,
+        dry_run: bool = True,
+        mock_window_state: Optional[Dict[str, Any]] = None,
+        interactive_confirmed: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        if not dry_run and not REAL_SEND_ENABLED:
+            return {
+                "status": "CIRCUIT_BREAKER_BLOCKED",
+                "app": "telegram",
+                "executed": False,
+                "dry_run": True,
+                "recipient": recipient,
+                "text": text,
+                "output": "[CIRCUIT BREAKER BLOCKED] Real messaging execution is permanently locked (REAL_SEND_ENABLED=False).",
+            }
+
+        ui_verif = verify_chat_ui_target("telegram", recipient, mock_window_state=mock_window_state)
+        if not ui_verif["verified"]:
+            return {
+                "status": ui_verif["status"],
+                "app": "telegram",
+                "executed": False,
+                "dry_run": dry_run,
+                "recipient": recipient,
+                "text": text,
+                "target_verification": ui_verif,
+                "output": f"[SAFETY ABORT] {ui_verif['reason']}",
+            }
+
+        if dry_run:
+            return {
+                "status": "SIMULATED_SUCCESS",
+                "app": "telegram",
+                "executed": False,
+                "dry_run": True,
+                "recipient": recipient,
+                "text": text,
+                "target_verification": ui_verif,
+                "output": f"[SIMULATION: MOCK SEND] Verified UI target: '{recipient}'. Would send via Telegram Desktop: \"{text}\"",
+            }
+
+        confirmed = interactive_confirmed if interactive_confirmed is not None else request_live_human_confirmation(recipient, text)
+        if not confirmed:
+            return {
+                "status": "DRY_RUN_PENDING_HITL",
+                "app": "telegram",
+                "executed": False,
+                "dry_run": True,
+                "recipient": recipient,
+                "text": text,
+                "output": f"[GUARDRAIL BLOCKED] Action 'Send Message' requires explicit live human confirmation.",
+            }
+
+        stage_res = self.stage_message(recipient, text, dry_run=False, mock_window_state=mock_window_state)
+        if stage_res["status"] != "SUCCESS":
+            return stage_res
+
+        time.sleep(1.0)
+        import ctypes
+        user32 = ctypes.windll.user32
+        user32.keybd_event(0x0D, 0, 0, 0)
+        user32.keybd_event(0x0D, 0, 2, 0)
+
+        return {
+            "status": "SUCCESS",
+            "app": "telegram",
+            "executed": True,
+            "dry_run": False,
+            "recipient": recipient,
+            "text": text,
+            "output": f"[REAL SEND SUCCESS] Successfully sent message to '{recipient}' via Telegram Desktop.",
+        }
+
+
+class DiscordClient(MessagingClientInterface):
+    """Adapter for Discord desktop automation."""
+
+    @property
+    def app_name(self) -> str:
+        return "discord"
+
+    def stage_message(
+        self,
+        recipient: str,
+        text: str,
+        dry_run: bool = True,
+        mock_window_state: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        ui_verif = verify_chat_ui_target("discord", recipient, mock_window_state=mock_window_state)
+        if dry_run:
+            return {
+                "status": "SIMULATED_STAGE",
+                "app": "discord",
+                "executed": False,
+                "dry_run": True,
+                "recipient": recipient,
+                "staged_text": text,
+                "target_verification": ui_verif,
+                "output": f"[SIMULATED STAGING] Staged message for '{recipient}' in Discord with text: \"{text}\". Target verification: {ui_verif['status']}.",
+            }
+
+        if not REAL_SEND_ENABLED:
+            return {
+                "status": "CIRCUIT_BREAKER_BLOCKED",
+                "app": "discord",
+                "executed": False,
+                "dry_run": True,
+                "recipient": recipient,
+                "staged_text": text,
+                "target_verification": ui_verif,
+                "output": "[CIRCUIT BREAKER BLOCKED] Real execution is disabled in code (REAL_SEND_ENABLED=False).",
+            }
+
+        if not ui_verif["verified"]:
+            return {
+                "status": ui_verif["status"],
+                "app": "discord",
+                "executed": False,
+                "dry_run": False,
+                "recipient": recipient,
+                "staged_text": text,
+                "target_verification": ui_verif,
+                "output": f"[SAFETY ABORT] {ui_verif['reason']}",
+            }
+
+        import win32clipboard
+        import win32con
+        prior_clipboard = None
+        try:
+            win32clipboard.OpenClipboard()
+            if win32clipboard.IsClipboardFormatAvailable(win32con.CF_UNICODETEXT):
+                prior_clipboard = win32clipboard.GetClipboardData(win32con.CF_UNICODETEXT)
+            win32clipboard.EmptyClipboard()
+            win32clipboard.SetClipboardText(text, win32con.CF_UNICODETEXT)
+        finally:
+            try:
+                win32clipboard.CloseClipboard()
+            except Exception:
+                pass
+
+        from tools.app_launcher import focus_app
+        focus_app("discord")
+        time.sleep(0.5)
+
+        import ctypes
+        user32 = ctypes.windll.user32
+        user32.keybd_event(0x11, 0, 0, 0)
+        user32.keybd_event(0x56, 0, 0, 0)
+        user32.keybd_event(0x56, 0, 2, 0)
+        user32.keybd_event(0x11, 0, 2, 0)
+        time.sleep(0.5)
+
+        if prior_clipboard is not None:
+            try:
+                win32clipboard.OpenClipboard()
+                win32clipboard.EmptyClipboard()
+                win32clipboard.SetClipboardText(prior_clipboard, win32con.CF_UNICODETEXT)
+                win32clipboard.CloseClipboard()
+            except Exception:
+                pass
+
+        return {
+            "status": "SUCCESS",
+            "app": "discord",
+            "executed": True,
+            "dry_run": False,
+            "recipient": recipient,
+            "staged_text": text,
+            "target_verification": ui_verif,
+            "output": f"[REAL STAGING SUCCESS] Staged message for '{recipient}' in Discord: \"{text}\"",
+        }
+
+    def send_message(
+        self,
+        recipient: str,
+        text: str,
+        dry_run: bool = True,
+        mock_window_state: Optional[Dict[str, Any]] = None,
+        interactive_confirmed: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        if not dry_run and not REAL_SEND_ENABLED:
+            return {
+                "status": "CIRCUIT_BREAKER_BLOCKED",
+                "app": "discord",
+                "executed": False,
+                "dry_run": True,
+                "recipient": recipient,
+                "text": text,
+                "output": "[CIRCUIT BREAKER BLOCKED] Real messaging execution is permanently locked (REAL_SEND_ENABLED=False).",
+            }
+
+        ui_verif = verify_chat_ui_target("discord", recipient, mock_window_state=mock_window_state)
+        if not ui_verif["verified"]:
+            return {
+                "status": ui_verif["status"],
+                "app": "discord",
+                "executed": False,
+                "dry_run": dry_run,
+                "recipient": recipient,
+                "text": text,
+                "target_verification": ui_verif,
+                "output": f"[SAFETY ABORT] {ui_verif['reason']}",
+            }
+
+        if dry_run:
+            return {
+                "status": "SIMULATED_SUCCESS",
+                "app": "discord",
+                "executed": False,
+                "dry_run": True,
+                "recipient": recipient,
+                "text": text,
+                "target_verification": ui_verif,
+                "output": f"[SIMULATION: MOCK SEND] Verified UI target: '{recipient}'. Would send via Discord: \"{text}\"",
+            }
+
+        confirmed = interactive_confirmed if interactive_confirmed is not None else request_live_human_confirmation(recipient, text)
+        if not confirmed:
+            return {
+                "status": "DRY_RUN_PENDING_HITL",
+                "app": "discord",
+                "executed": False,
+                "dry_run": True,
+                "recipient": recipient,
+                "text": text,
+                "output": f"[GUARDRAIL BLOCKED] Action 'Send Message' requires explicit live human confirmation.",
+            }
+
+        stage_res = self.stage_message(recipient, text, dry_run=False, mock_window_state=mock_window_state)
+        if stage_res["status"] != "SUCCESS":
+            return stage_res
+
+        time.sleep(1.0)
+        import ctypes
+        user32 = ctypes.windll.user32
+        user32.keybd_event(0x0D, 0, 0, 0)
+        user32.keybd_event(0x0D, 0, 2, 0)
+
+        return {
+            "status": "SUCCESS",
+            "app": "discord",
+            "executed": True,
+            "dry_run": False,
+            "recipient": recipient,
+            "text": text,
+            "output": f"[REAL SEND SUCCESS] Successfully sent message to '{recipient}' via Discord.",
+        }
+
+
+MESSAGING_CLIENTS: Dict[str, MessagingClientInterface] = {
+    "whatsapp": WhatsAppDesktopClient(),
+    "telegram": TelegramClient(),
+    "discord": DiscordClient(),
+}
+
+
+def get_messaging_client(app_name: str) -> MessagingClientInterface:
+    """Retrieves registered messaging adapter for the given application."""
+    key = app_name.lower().strip()
+    if key not in MESSAGING_CLIENTS:
+        raise ValueError(f"Unsupported messaging client: '{app_name}'. Supported: {list(MESSAGING_CLIENTS.keys())}")
+    return MESSAGING_CLIENTS[key]
+
+
+# ==============================================================================
+# MULTI-TURN MESSAGING LOOP & SESSION STATE MACHINE
+# ==============================================================================
+
+class MessagingSessionState(str, Enum):
+    INITIAL = "INITIAL"
+    INTERACTIVE_CLARIFICATION = "INTERACTIVE_CLARIFICATION"
+    STAGING_PENDING_CONFIRMATION = "STAGING_PENDING_CONFIRMATION"
+    CONFIRMED = "CONFIRMED"
+    EXECUTED = "EXECUTED"
+    ABORTED = "ABORTED"
+
+
+class MultiTurnMessagingSession:
+    """
+    Stateful multi-turn conversational session for messaging automation:
+    - If user specifies recipient without message body ("Message Aravind"), pauses in
+      INTERACTIVE_CLARIFICATION asking "What would you like to send?".
+    - Handles contact ambiguity and application ambiguity.
+    - Yields staging payload for user confirmation.
+    - Enforces fail-closed circuit breakers on send execution.
+    """
+
+    def __init__(
+        self,
+        known_contacts: Optional[List[str]] = None,
+        available_apps: Optional[List[str]] = None,
+        client: Optional[MessagingClientInterface] = None,
+    ):
+        self.known_contacts = known_contacts if known_contacts is not None else DEFAULT_CONTACT_BOOK
+        self.available_apps = available_apps if available_apps is not None else ["whatsapp", "telegram", "discord"]
+        self.client = client
+        self.state: MessagingSessionState = MessagingSessionState.INITIAL
+        self.recipient: Optional[str] = None
+        self.app_name: str = "whatsapp"
+        self.message_text: Optional[str] = None
+        self.pending_clarification_type: Optional[str] = None  # 'recipient', 'app', or 'message'
+        self.staging_result: Optional[Dict[str, Any]] = None
+        self.execution_result: Optional[Dict[str, Any]] = None
+
+    def process_turn(
+        self,
+        user_input: str,
+        dry_run: bool = True,
+        mock_window_state: Optional[Dict[str, Any]] = None,
+        interactive_confirmed: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """
+        Processes one turn of user input in the conversation loop.
+        """
+        text = user_input.strip()
+
+        if self.state == MessagingSessionState.INITIAL:
+            intent = parse_messaging_intent(text, known_contacts=self.known_contacts, available_apps=self.available_apps)
+            self.app_name = intent["app"]
+            self.recipient = intent["resolved_recipient"]
+
+            if self.client is None or self.client.app_name != self.app_name:
+                self.client = get_messaging_client(self.app_name)
+
+            if intent["is_contact_ambiguous"]:
+                self.state = MessagingSessionState.INTERACTIVE_CLARIFICATION
+                self.pending_clarification_type = "recipient"
+                return {
+                    "state": self.state.value,
+                    "prompt": intent["clarification_prompt"],
+                    "needs_input": True,
+                    "recipient": self.recipient,
+                    "app": self.app_name,
+                }
+            elif intent["is_app_ambiguous"]:
+                self.state = MessagingSessionState.INTERACTIVE_CLARIFICATION
+                self.pending_clarification_type = "app"
+                return {
+                    "state": self.state.value,
+                    "prompt": intent["clarification_prompt"],
+                    "needs_input": True,
+                    "recipient": self.recipient,
+                    "app": self.app_name,
+                }
+            elif intent["is_message_empty"]:
+                self.state = MessagingSessionState.INTERACTIVE_CLARIFICATION
+                self.pending_clarification_type = "message"
+                return {
+                    "state": self.state.value,
+                    "prompt": "What would you like to send?",
+                    "needs_input": True,
+                    "recipient": self.recipient,
+                    "app": self.app_name,
+                }
+            else:
+                self.message_text = intent["formatted_message"]
+                return self._stage_and_prompt_confirmation(dry_run=dry_run, mock_window_state=mock_window_state)
+
+        elif self.state == MessagingSessionState.INTERACTIVE_CLARIFICATION:
+            if self.pending_clarification_type == "recipient":
+                matching = [c for c in self.known_contacts if text.lower() in c.lower()]
+                if len(matching) == 1:
+                    self.recipient = matching[0]
+                    if not self.message_text:
+                        self.pending_clarification_type = "message"
+                        return {
+                            "state": self.state.value,
+                            "prompt": "What would you like to send?",
+                            "needs_input": True,
+                            "recipient": self.recipient,
+                            "app": self.app_name,
+                        }
+                    else:
+                        return self._stage_and_prompt_confirmation(dry_run=dry_run, mock_window_state=mock_window_state)
+                else:
+                    return {
+                        "state": self.state.value,
+                        "prompt": f"Still unclear. Please specify the exact contact name ({', '.join(self.known_contacts[:4])}...)",
+                        "needs_input": True,
+                        "recipient": self.recipient,
+                        "app": self.app_name,
+                    }
+
+            elif self.pending_clarification_type == "app":
+                app_clean = text.lower()
+                for a in ["whatsapp", "telegram", "discord"]:
+                    if a in app_clean:
+                        self.app_name = a
+                        self.client = get_messaging_client(self.app_name)
+                        break
+                if not self.message_text:
+                    self.pending_clarification_type = "message"
+                    return {
+                        "state": self.state.value,
+                        "prompt": "What would you like to send?",
+                        "needs_input": True,
+                        "recipient": self.recipient,
+                        "app": self.app_name,
+                    }
+                else:
+                    return self._stage_and_prompt_confirmation(dry_run=dry_run, mock_window_state=mock_window_state)
+
+            elif self.pending_clarification_type == "message":
+                self.message_text = format_dictated_text(text)
+                return self._stage_and_prompt_confirmation(dry_run=dry_run, mock_window_state=mock_window_state)
+
+        elif self.state == MessagingSessionState.STAGING_PENDING_CONFIRMATION:
+            if text.lower() in ("confirm send", "yes", "confirm", "send", "y"):
+                self.state = MessagingSessionState.CONFIRMED
+                client = self.client or get_messaging_client(self.app_name)
+                res = client.send_message(
+                    self.recipient or "Unknown",
+                    self.message_text or "",
+                    dry_run=dry_run,
+                    mock_window_state=mock_window_state,
+                    interactive_confirmed=True if interactive_confirmed is None else interactive_confirmed,
+                )
+                self.execution_result = res
+                self.state = MessagingSessionState.EXECUTED if (res.get("executed") or res.get("status") in ("SIMULATED_SUCCESS", "SUCCESS")) else MessagingSessionState.ABORTED
+                return {
+                    "state": self.state.value,
+                    "needs_input": False,
+                    "result": res,
+                    "output": res.get("output", ""),
+                }
+            else:
+                self.state = MessagingSessionState.ABORTED
+                return {
+                    "state": self.state.value,
+                    "needs_input": False,
+                    "output": "[ABORTED] Message send cancelled by user.",
+                }
+
+        return {
+            "state": self.state.value,
+            "needs_input": False,
+            "output": f"Session in terminal state: {self.state.value}",
+        }
+
+    def _stage_and_prompt_confirmation(
+        self,
+        dry_run: bool = True,
+        mock_window_state: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        client = self.client or get_messaging_client(self.app_name)
+        stage_res = client.stage_message(
+            self.recipient or "Unknown",
+            self.message_text or "",
+            dry_run=dry_run,
+            mock_window_state=mock_window_state,
+        )
+        self.staging_result = stage_res
+        self.state = MessagingSessionState.STAGING_PENDING_CONFIRMATION
+        prompt = (
+            f"[CONFIRMATION REQUIRED] Ready to send message to '{self.recipient}' via {self.app_name}:\n"
+            f"  Text: \"{self.message_text}\"\n"
+            f"Confirm send? (yes/no)"
+        )
+        return {
+            "state": self.state.value,
+            "prompt": prompt,
+            "needs_input": True,
+            "recipient": self.recipient,
+            "text": self.message_text,
+            "staging_result": stage_res,
+            "output": stage_res.get("output", ""),
         }

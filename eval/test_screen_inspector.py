@@ -297,7 +297,12 @@ def get_or_spawn_calculator() -> int:
                 matching_hwnds.append(h)
         return True
 
-    win32gui.EnumWindows(_find, None)
+    for _ in range(5):
+        try:
+            win32gui.EnumWindows(_find, None)
+            break
+        except Exception:
+            time.sleep(0.25)
     for h in matching_hwnds:
         if _is_healthy(h):
             CALC_HWND = h
@@ -327,7 +332,10 @@ def get_or_spawn_calculator() -> int:
     for _ in range(15):
         time.sleep(0.4)
         matching_hwnds.clear()
-        win32gui.EnumWindows(_find, None)
+        try:
+            win32gui.EnumWindows(_find, None)
+        except Exception:
+            pass
         for h in matching_hwnds:
             if _is_healthy(h):
                 CALC_HWND = h

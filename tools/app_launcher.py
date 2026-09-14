@@ -226,26 +226,30 @@ def focus_app(app_name: str) -> Dict[str, Any]:
     if hdesk:
         user32.SetThreadDesktop(hdesk)
 
-    WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_int, ctypes.c_int)
+    import win32gui
 
-    def enum_cb(hwnd, lparam):
-        if user32.IsWindow(hwnd):
-            length = user32.GetWindowTextLengthW(hwnd)
-            if length > 0:
-                buff = ctypes.create_unicode_buffer(length + 1)
-                user32.GetWindowTextW(hwnd, buff, length + 1)
-                title = buff.value
-                if target in title.lower() and "gdi+" not in title.lower():
+    def _cb(hwnd, _):
+        if win32gui.IsWindow(hwnd):
+            try:
+                title = win32gui.GetWindowText(hwnd)
+                cls_name = win32gui.GetClassName(hwnd)
+                if (target in title.lower() or target in cls_name.lower()) and "gdi+" not in title.lower():
                     found_hwnds.append((hwnd, title))
+            except Exception:
+                pass
         return True
 
-    cb = WNDENUMPROC(enum_cb)
-    user32.EnumWindows(cb, 0)
+    try:
+        win32gui.EnumWindows(_cb, None)
+    except Exception:
+        pass
 
     if not found_hwnds:
         return {
             "status": "NOT_FOUND",
             "app_name": app_name,
+            "found": False,
+            "hwnd": 0,
             "output": f"No active window found matching '{app_name}'.",
         }
 
@@ -257,5 +261,7 @@ def focus_app(app_name: str) -> Dict[str, Any]:
         "status": "SUCCESS",
         "app_name": app_name,
         "window_title": title,
+        "found": True,
+        "hwnd": hwnd,
         "output": f"Brought window '{title}' to foreground.",
     }
