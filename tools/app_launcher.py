@@ -32,6 +32,16 @@ BUILTIN_APPS = {
     "task manager": "taskmgr.exe",
     "taskmgr": "taskmgr.exe",
     "control panel": "control.exe",
+    "microsoft store": "ms-windows-store:",
+    "store": "ms-windows-store:",
+    "store.exe": "ms-windows-store:",
+    "xbox": "ms-xbox-splash:",
+    "xbox.exe": "ms-xbox-splash:",
+    "xboxpcappce": "ms-xbox-splash:",
+    "xboxpcappce.exe": "ms-xbox-splash:",
+    "xboxpcappadminserver": "ms-xbox-splash:",
+    "xboxpcappadminserver.exe": "ms-xbox-splash:",
+    "wuthering waves": r"C:\Program Files\Wuthering Waves\launcher.exe",
 }
 
 
@@ -227,6 +237,17 @@ def _verify_process_alive(
         "control.exe": "explorer.exe",
         "wt.exe": "windowsterminal.exe",
         "terminal": "windowsterminal.exe",
+        "ms-windows-store:": "winstore.app.exe",
+        "store.exe": "winstore.app.exe",
+        "store": "winstore.app.exe",
+        "ms-xbox-splash:": "xboxpcapp.exe",
+        "xbox": "xboxpcapp.exe",
+        "xboxpcappce.exe": "xboxpcapp.exe",
+        "launcher.exe": "launcher_main.exe",
+        "wuthering waves.exe": "client-win64-shipping.exe",
+        "wuthering waves": "launcher_main.exe",
+        "git-gui.exe": "wish.exe",
+        "git gui": "wish.exe",
     }
     for alias_k, alias_v in ALIAS_MAP.items():
         if alias_k in images_to_check:
@@ -528,6 +549,16 @@ def close_app(
         "terminal": "windowsterminal.exe",
         "wt.exe": "windowsterminal.exe",
         "control panel": "explorer.exe",
+        "store": "winstore.app.exe",
+        "microsoft store": "winstore.app.exe",
+        "ms-windows-store:": "winstore.app.exe",
+        "xbox": "xboxpcapp.exe",
+        "xboxpcappce": "xboxpcapp.exe",
+        "wuthering waves": "launcher_main.exe",
+        "wuthering waves.exe": "launcher_main.exe",
+        "launcher.exe": "launcher_main.exe",
+        "git gui": "wish.exe",
+        "git-gui.exe": "wish.exe",
     }
     if clean_name in ALIAS_CLOSE_MAP:
         target_img = ALIAS_CLOSE_MAP[clean_name]
@@ -542,6 +573,17 @@ def close_app(
             "output": f"Resolved executable '{target_img}' is protected and cannot be closed.",
         }
 
+    # Related process images that should also be cleaned up (e.g. launchers and child game clients)
+    TARGET_IMAGE_FAMILIES = {
+        "launcher_main.exe": {"launcher_main.exe", "launcher.exe", "wuthering waves.exe", "client-win64-shipping.exe"},
+        "winstore.app.exe": {"winstore.app.exe", "storedesktopextension.exe"},
+        "xboxpcapp.exe": {"xboxpcapp.exe", "xboxapp.exe", "gamingapp.exe", "xboxpcappce.exe"},
+        "wish.exe": {"wish.exe", "git-gui.exe"},
+    }
+    match_images = {target_img, f"{target_img}.exe"}
+    if target_img in TARGET_IMAGE_FAMILIES:
+        match_images.update(TARGET_IMAGE_FAMILIES[target_img])
+
     # 1. Collect target PIDs cleanly using psutil
     target_pids = set()
     if pid is not None:
@@ -552,7 +594,7 @@ def close_app(
             for p in psutil.process_iter(["pid", "name"]):
                 try:
                     p_name = p.info["name"].lower()
-                    if p_name == target_img or p_name == f"{target_img}.exe":
+                    if p_name in match_images:
                         p_pid = p.info["pid"]
                         if p_pid > 4 and p_name not in PROTECTED_PROCESSES:
                             target_pids.add(p_pid)

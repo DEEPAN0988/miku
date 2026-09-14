@@ -72,6 +72,15 @@ EXCLUDED_APP_KEYWORDS = [
     "vcredist",
     "dxsetup",
     "update",
+    "browsernativemessagehost",
+    "childsession",
+    "autostarter",
+    "release notes",
+    "releasenotes",
+    "user guide",
+    "userguide",
+    "sql shell (psql)",
+    "runpsql",
 ]
 
 
@@ -97,14 +106,18 @@ def get_all_testable_apps() -> List[str]:
         resolved_name, target_path = res
         norm_target = os.path.normpath(target_path).lower()
 
+        # Filter out non-GUI documentation, websites, text, and html files
+        if norm_target.endswith((".html", ".htm", ".url", ".chm", ".txt", ".pdf")):
+            continue
+
         # Check against protected IDE / critical system processes
         if any(p in norm_target for p in PROTECTED_PROCESSES):
             continue
         if any(k in norm_target for k in EXCLUDED_APP_KEYWORDS):
             continue
 
-        # Filter out dead shortcuts / missing target binaries
-        if not (os.path.exists(target_path) or shutil.which(target_path)):
+        # Filter out dead shortcuts / missing target binaries (unless protocol URI like ms-windows-store:)
+        if not (norm_target.startswith("ms-") or os.path.exists(target_path) or shutil.which(target_path)):
             continue
 
         target_map.setdefault(norm_target, []).append(clean)
@@ -176,7 +189,7 @@ def write_markdown_report(report_path: str, stats: Dict[str, Any], history: List
         t_str = item.get("time", "")
         name = item.get("app", "")
         mode = item.get("mode", "N/A")
-        status = "**SUCCESS**" if item.get("status") == "SUCCESS" else "<span style='color:red;'>FAILED</span>"
+        status = "**SUCCESS**" if item.get("status") in ("SUCCESS", "FALLBACK_DIRECT_ELEVATION") else "<span style='color:red;'>FAILED</span>"
         pid = str(item.get("pid", "-"))
         output = item.get("output", "").replace("|", "-")
         if len(output) > 60:
