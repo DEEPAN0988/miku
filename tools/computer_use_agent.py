@@ -386,7 +386,10 @@ def dispatch_computer_use_action(
                 details={"reason": text_reason},
             )
 
-        if real_execution and REAL_TYPE_ENABLED:
+        allow_real_typing = real_execution and (
+            REAL_TYPE_ENABLED or tools.typing_automation.REAL_TYPE_ENABLED or check_autonomous_authorization("TYPE")
+        )
+        if allow_real_typing:
             # Dispatch Unicode keystrokes via Win32 SendInput
             typed_count = 0
             for ch in safe_text:
