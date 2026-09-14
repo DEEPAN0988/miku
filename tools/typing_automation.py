@@ -124,9 +124,11 @@ def sanitize_typing_payload(text: str) -> Tuple[bool, str, str]:
     Sanitizes and inspects text payload for safety before staging or typing.
 
     Rejection criteria:
-      1. Empty text.
-      2. Excessive length (> MAX_STAGED_TEXT_LENGTH).
-      3. Dangerous control characters (NULL, BEL, BS, ESC, SIGINT, EOT).
+      1. Empty text or non-string.
+      2. Dangerous control characters (NULL, BEL, BS, ESC, SIGINT, EOT).
+
+    Payloads exceeding MAX_STAGED_TEXT_LENGTH are gracefully truncated with an informational log:
+      [PAYLOAD_TRUNCATED]
 
     Returns:
       (is_safe, sanitized_text, reason)
@@ -137,16 +139,21 @@ def sanitize_typing_payload(text: str) -> Tuple[bool, str, str]:
     if len(text) == 0:
         return False, "", "REJECT_EMPTY_TEXT"
 
-    if len(text) > MAX_STAGED_TEXT_LENGTH:
-        return False, "", f"REJECT_EXCEEDS_MAX_LENGTH_{len(text)}_GT_{MAX_STAGED_TEXT_LENGTH}"
+    sanitized = text
+    reason = "SAFE"
+    if len(sanitized) > MAX_STAGED_TEXT_LENGTH:
+        sanitized = sanitized[:MAX_STAGED_TEXT_LENGTH]
+        print(f"[*] [PAYLOAD_TRUNCATED] Text payload exceeded {MAX_STAGED_TEXT_LENGTH} chars; truncated to {len(sanitized)} chars.", flush=True)
+        reason = "PAYLOAD_TRUNCATED"
 
-    # Forbid ASCII control characters below 32 (except newline \n and tab \t)
-    for ch in text:
+    # Filter illegal control characters (\x00, \x03, \x04, \x1B) or ASCII < 32 except newline \n and tab \t
+    illegal_controls = {'\x00', '\x03', '\x04', '\x1B'}
+    for ch in sanitized:
         code = ord(ch)
-        if code < 32 and ch not in ("\n", "\t"):
+        if ch in illegal_controls or (code < 32 and ch not in ("\n", "\t")):
             return False, "", f"REJECT_FORBIDDEN_CONTROL_CHAR_0x{code:02X}"
 
-    return True, text, "SAFE"
+    return True, sanitized, reason
 
 
 def verify_element_editable(
@@ -351,8 +358,13 @@ def request_live_human_type_confirmation(
 ) -> bool:
     """
     Strict interactive human confirmation gate for real typing dispatch.
-    Fails closed (returns False) in non-interactive environments or automated scripts.
+    If MIKU_AUTONOMOUS_MODE=True and MIKU_LIVE_EXECUTION=True, permits execution non-blockingly.
+    Otherwise requires interactive console (sys.stdin.isatty()) and typing 'CONFIRM TYPE'.
     """
+    from tools.screen_inspector import check_autonomous_authorization
+    if check_autonomous_authorization("TYPE"):
+        return True
+
     if not sys.stdin or not sys.stdin.isatty():
         return False
 

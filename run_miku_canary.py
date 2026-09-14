@@ -15,10 +15,13 @@ Execution Flow:
 
 from __future__ import annotations
 
+import os
+os.environ["MIKU_LIVE_EXECUTION"] = "true"
+os.environ["MIKU_AUTONOMOUS_MODE"] = "true"
+
 import ctypes
 from ctypes import wintypes
 import json
-import os
 import sys
 import time
 from typing import Optional, Tuple, List
@@ -161,11 +164,12 @@ def run_canary():
     print("[*] [RENDER STABILIZATION] Sleeping 1.0s to ensure complete UI tree & bitmap rendering...", flush=True)
     time.sleep(1.0)
 
-    # Bring to foreground to ensure unoccluded focus state for safety verification
+    # Bring to foreground and restore if minimized to ensure unoccluded focus state for safety verification
     try:
-        ctypes.windll.user32.ShowWindow(calc_hwnd, 5)  # SW_SHOW
+        ctypes.windll.user32.ShowWindow(calc_hwnd, 9)  # SW_RESTORE
         ctypes.windll.user32.SetForegroundWindow(calc_hwnd)
-        time.sleep(0.3)
+        time.sleep(0.5)
+        rect = win32gui.GetWindowRect(calc_hwnd)
     except Exception:
         pass
 

@@ -71,11 +71,12 @@ class TestTypingAutomation(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(reason, "REJECT_NOT_STRING")
 
-        # 3. Exceeds max length
-        long_text = "a" * (MAX_STAGED_TEXT_LENGTH + 1)
+        # 3. Exceeds max length -> Gracefully truncated
+        long_text = "a" * (MAX_STAGED_TEXT_LENGTH + 50)
         ok, text, reason = sanitize_typing_payload(long_text)
-        self.assertFalse(ok)
-        self.assertTrue(reason.startswith("REJECT_EXCEEDS_MAX_LENGTH"))
+        self.assertTrue(ok)
+        self.assertEqual(len(text), MAX_STAGED_TEXT_LENGTH)
+        self.assertEqual(reason, "PAYLOAD_TRUNCATED")
 
         # 4. Control characters (NULL byte, Escape, Bell)
         ok, text, reason = sanitize_typing_payload("hello\x00world")
