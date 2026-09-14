@@ -1,0 +1,30 @@
+{
+  "total_train": 37199,
+  "total_val": 1965,
+  "domains": {
+    "scenario": {
+      "train": 4208,
+      "val": 221
+    },
+    "tool": {
+      "train": 7239,
+      "val": 381
+    },
+    "hierarchical": {
+      "train": 7239,
+      "val": 381
+    },
+    "multiturn": {
+      "train": 3800,
+      "val": 200
+    },
+    "diversified": {
+      "train": 3800,
+      "val": 200
+    },
+    "dolly": {
+      "train": 14071,
+      "val": 740
+    }
+  }
+}
