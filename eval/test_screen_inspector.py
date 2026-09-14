@@ -318,39 +318,8 @@ def get_or_spawn_calculator() -> int:
             set_window_foreground_passive(CALC_HWND)
             time.sleep(0.2)
             return CALC_HWND
-
-    # Terminate any hung/invisible leftover calc processes
-    for p in psutil.process_iter(["name"]):
-        if p.info["name"] and any(x in p.info["name"].lower() for x in ["calculator", "calc"]):
-            try:
-                p.terminate()
-            except Exception:
-                pass
-    time.sleep(0.5)
-
-    subprocess.Popen(["calc.exe"])
-    for _ in range(15):
-        time.sleep(0.4)
-        matching_hwnds.clear()
-        try:
-            win32gui.EnumWindows(_find, None)
-        except Exception:
-            pass
-        for h in matching_hwnds:
-            if _is_healthy(h):
-                CALC_HWND = h
-                break
-        if CALC_HWND:
-            break
-
-    if not _is_healthy(CALC_HWND):
-        raise RuntimeError("Failed to obtain healthy Calculator window")
-
-    user32.ShowWindow(CALC_HWND, win32con.SW_RESTORE)
-    user32.ShowWindow(CALC_HWND, win32con.SW_SHOWNORMAL)
-    set_window_foreground_passive(CALC_HWND)
-    time.sleep(0.3)
-    return CALC_HWND
+    # If no healthy open Calculator window was found, skip live tests rather than spawning
+    raise unittest.SkipTest("No open Calculator window found; skipping live window inspection to avoid unprompted process spawning")
 
 
 def find_other_desktop_window(exclude_hwnd: int) -> int:

@@ -58,7 +58,9 @@ class TestResourceFetcher(unittest.TestCase):
         self.assertIn("winget search", res["command"])
 
     def test_dispatch_application_with_mock_winget(self):
-        """Verify application query parses winget matches properly."""
+        """Verify application query parses winget matches properly when runner is mocked."""
+        from unittest.mock import patch
+
         def mock_winget_runner(cmd):
             return {
                 "status": "SUCCESS",
@@ -71,10 +73,17 @@ class TestResourceFetcher(unittest.TestCase):
                 "error": None,
             }
 
-        res = dispatch_resource_fetch("install vlc", dry_run=False, winget_runner=mock_winget_runner)
-        self.assertEqual(res["status"], "WINGET_MATCH_FOUND")
-        self.assertEqual(res["recommended_id"], "VideoLAN.VLC")
-        self.assertIn("winget install --id VideoLAN.VLC", res["recommended_command"])
+        with patch("tools.resource_fetcher.REAL_RESOURCE_FETCH_ENABLED", True):
+            res = dispatch_resource_fetch("install vlc", dry_run=False, winget_runner=mock_winget_runner)
+            self.assertEqual(res["status"], "WINGET_MATCH_FOUND")
+            self.assertEqual(res["recommended_id"], "VideoLAN.VLC")
+            self.assertIn("winget install --id VideoLAN.VLC", res["recommended_command"])
+
+    def test_dispatch_application_circuit_breaker_fails_closed(self):
+        """Verify that real non-dry-run dispatch is blocked by circuit breaker by default."""
+        res = dispatch_resource_fetch("install vlc", dry_run=False)
+        self.assertEqual(res["status"], "CIRCUIT_BREAKER_BLOCKED")
+        self.assertFalse(res["executed"])
 
     def test_dispatch_dataset_formats_browser_query(self):
         """Verify dataset query formats browser search URL."""

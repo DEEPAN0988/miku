@@ -6,6 +6,10 @@ Tests the unified combination of:
   - Option 2: GUI Edit Control Text Staging & Typing Automation (Sanitizer, editability, simulation)
 """
 
+import os
+import sys
+sys.path.insert(0, os.path.abspath("."))
+
 import unittest
 import time
 import ctypes
@@ -100,7 +104,21 @@ class TestGUIAutomationAdvanced(unittest.TestCase):
         Tests live hybrid UIA + Vision fallback inspection and pre-typing control
         gating on an active desktop window (Calculator).
         """
-        calc_hwnd = get_or_spawn_calculator()
+        calc_hwnds = []
+        def _find_calc(h, _):
+            if win32gui.IsWindowVisible(h):
+                try:
+                    t = win32gui.GetWindowText(h)
+                    c = win32gui.GetClassName(h)
+                    if ("calculator" in t.lower() or "calculator" in c.lower()) and "frame" in c.lower():
+                        calc_hwnds.append(h)
+                except Exception:
+                    pass
+            return True
+        win32gui.EnumWindows(_find_calc, None)
+        if not calc_hwnds:
+            self.skipTest("Calculator is not already open; skipping live test to avoid unprompted process spawning")
+        calc_hwnd = calc_hwnds[0]
         set_window_foreground_passive(calc_hwnd)
         time.sleep(0.3)
 

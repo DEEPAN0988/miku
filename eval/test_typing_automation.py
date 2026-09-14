@@ -17,6 +17,9 @@ Tests:
 
 import unittest
 import sys
+import os
+
+sys.path.insert(0, os.path.abspath("."))
 
 from tools.screen_inspector import UIElement
 from tools.typing_automation import (

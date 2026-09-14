@@ -101,7 +101,6 @@ class TestMultiTurnMessaging(unittest.TestCase):
             "CONFIRM SEND",
             dry_run=True,
             mock_window_state=self.mock_whatsapp_window,
-            interactive_confirmed=True,
         )
         self.assertEqual(session.state, MessagingSessionState.EXECUTED)
         self.assertFalse(turn3["needs_input"])

@@ -12,9 +12,13 @@ Tests:
   4. Real Win32 GDI Bitmap Capture Smoke Test.
 """
 
+import os
+import sys
 import unittest
 import numpy as np
 import cv2
+
+sys.path.insert(0, os.path.abspath("."))
 
 from tools.screen_inspector import UIElement, ScreenSnapshot
 from tools.vision_grounder import (
