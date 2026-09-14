@@ -188,6 +188,17 @@ def launch_app(app_name: str) -> Dict[str, Any]:
             "target": target,
             "output": f"Launched application '{resolved_name}' via target '{target}'.",
         }
+    except OSError as e:
+        if getattr(e, "winerror", None) == 740:
+            from tools.system_dispatcher import launch_elevated_app
+            return launch_elevated_app(app_name)
+        return {
+            "status": "ERROR",
+            "app_name": app_name,
+            "target": target,
+            "error": str(e),
+            "output": f"Failed to launch '{app_name}': {e}",
+        }
     except Exception as e:
         return {
             "status": "ERROR",

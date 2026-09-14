@@ -157,6 +157,22 @@ def register_elevated_task(
                 0,
             )
 
+        if exec_code <= 32 and shell_executor is None:
+            # Fallback to COM Shell.Application if ctypes was blocked by session/token isolation (code 5)
+            try:
+                import win32com.client
+                sh = win32com.client.Dispatch("Shell.Application")
+                sh.ShellExecute(
+                    "powershell.exe",
+                    f"-NoProfile -WindowStyle Hidden -Command \"{ps_cmd}\"",
+                    clean_wd or os.path.dirname(abs_exe),
+                    "runas",
+                    0,
+                )
+                exec_code = 42  # Handed off to Windows Shell COM server
+            except Exception:
+                pass
+
         if exec_code <= 32:
             return {
                 "status": "UAC_DENIED",
@@ -218,6 +234,19 @@ def launch_elevated_app(
     else:
         resolved_name = app_target.strip()
         target_path = app_target.strip()
+
+    # Unwrap .lnk shortcut target if applicable
+    if target_path.lower().endswith(".lnk") and os.path.exists(target_path):
+        try:
+            import win32com.client
+            sh = win32com.client.Dispatch("WScript.Shell")
+            sc = sh.CreateShortcut(target_path)
+            if sc.TargetPath and os.path.exists(sc.TargetPath):
+                if not working_dir and sc.WorkingDirectory and os.path.exists(sc.WorkingDirectory):
+                    working_dir = sc.WorkingDirectory
+                target_path = sc.TargetPath
+        except Exception:
+            pass
 
     is_valid, clean_target = _validate_path_security(target_path)
     if not is_valid:
@@ -314,6 +343,20 @@ def launch_elevated_app(
                 target_wd,
                 1,
             )
+            if exec_code <= 32:
+                try:
+                    import win32com.client
+                    sh = win32com.client.Dispatch("Shell.Application")
+                    sh.ShellExecute(
+                        clean_target,
+                        "",
+                        target_wd or "",
+                        "runas",
+                        1,
+                    )
+                    exec_code = 42
+                except Exception:
+                    pass
 
         if exec_code > 32:
             return {

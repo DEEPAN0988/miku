@@ -685,7 +685,7 @@ def dispatch_tool(tool_call: ToolCall, hitl_confirmed: bool = False, mock_window
         res = launch_app(tool_call.argument)
         return ToolResult(
             tool_call=tool_call,
-            executed=(res["status"] == "SUCCESS"),
+            executed=res.get("executed", res["status"] in ("SUCCESS", "FALLBACK_DIRECT_ELEVATION")),
             dry_run=False,
             output=f"[REAL APP LAUNCH] {res['output']}",
             status=res["status"]
