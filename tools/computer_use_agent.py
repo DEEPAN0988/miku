@@ -30,6 +30,9 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import win32gui
 
+import tools.screen_inspector
+import tools.typing_automation
+
 from tools.screen_inspector import (
     _attach_thread_to_default_desktop,
     verify_element_clickable,

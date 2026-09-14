@@ -24,6 +24,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+import tools.screen_inspector
+import tools.typing_automation
+
 from tools.screen_inspector import (
     UIElement,
     ScreenSnapshot,
