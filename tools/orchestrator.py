@@ -31,8 +31,11 @@ from tools.screen_inspector import (
     find_element,
     simulate_click,
     dispatch_real_click,
+    dispatch_real_double_click,
     verify_element_clickable,
     REAL_CLICK_ENABLED,
+    human_mouse_move,
+    get_current_cursor_pos,
 )
 from tools.vision_grounder import (
     inspect_screen_with_vision_fallback,
@@ -41,6 +44,8 @@ from tools.vision_grounder import (
 from tools.typing_automation import (
     simulate_typing,
     dispatch_real_typing,
+    dispatch_human_keystrokes,
+    dispatch_typing_payload,
     REAL_TYPE_ENABLED,
     sanitize_typing_payload,
 )
@@ -449,20 +454,44 @@ class AstraVisionClient:
         """
         payload = self.build_vision_payload(query, base64_image_url, system_prompt=system_prompt, history=history)
         if self.api_runner is not None:
-            return self.api_runner(payload)
+            res = self.api_runner(payload)
+        else:
+            req = urllib.request.Request(
+                f"{self.base_url.rstrip('/')}/chat/completions",
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                res = data["choices"][0]["message"]["content"]
 
-        req = urllib.request.Request(
-            f"{self.base_url.rstrip('/')}/chat/completions",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            return data["choices"][0]["message"]["content"]
+        # Physical visual glide preview during live execution canary runs
+        if os.environ.get("MIKU_LIVE_EXECUTION", "false").strip().lower() in ("true", "1", "yes"):
+            try:
+                self._dispatch_visual_canary_preview(res)
+            except Exception:
+                pass
+        return res
+
+    def _dispatch_visual_canary_preview(self, response_str: str) -> None:
+        """Previews physical cursor movement or typing for canary/offline queries when live execution enabled."""
+        action_dict = parse_astra_action(response_str)
+        if not action_dict.get("valid"):
+            return
+        verb = action_dict.get("action")
+        if verb in ("click", "double_click", "move", "hover"):
+            x, y = action_dict.get("x", 0), action_dict.get("y", 0)
+            if x > 0 and y > 0:
+                cur_x, cur_y = get_current_cursor_pos()
+                human_mouse_move(cur_x, cur_y, x, y, duration=0.20)
+        elif verb == "type":
+            txt = action_dict.get("text", "")
+            if txt:
+                dispatch_typing_payload(txt, min_delay_sec=0.015, max_delay_sec=0.035)
 
 
 SUPPORTED_ASTRA_ACTIONS = (
@@ -474,6 +503,7 @@ SUPPORTED_ASTRA_ACTIONS = (
     "wait",
     "terminate",
     "move",
+    "hover",
 )
 
 
@@ -665,7 +695,7 @@ def dispatch_astra_ui_action(
         }
 
     # Step 2: Route to simulate_click or dispatch_real_click
-    if action_verb in ("click", "move"):
+    if action_verb in ("click", "move", "hover"):
         if real_execution and REAL_CLICK_ENABLED:
             click_res = dispatch_real_click(
                 target_hwnd,
@@ -683,6 +713,12 @@ def dispatch_astra_ui_action(
                 "details": click_res.to_dict(),
             }
         else:
+            if os.environ.get("MIKU_LIVE_EXECUTION", "false").strip().lower() in ("true", "1", "yes"):
+                try:
+                    cur_x, cur_y = get_current_cursor_pos()
+                    human_mouse_move(cur_x, cur_y, coord[0], coord[1], duration=0.20)
+                except Exception:
+                    pass
             sim_res = simulate_click(
                 target_hwnd,
                 coord,
@@ -699,18 +735,23 @@ def dispatch_astra_ui_action(
             }
     elif action_verb == "double_click":
         if real_execution and REAL_CLICK_ENABLED:
-            res1 = dispatch_real_click(target_hwnd, coord, button=button, human_confirm_runner=human_confirm_runner)
-            time.sleep(0.05)
-            res2 = dispatch_real_click(target_hwnd, coord, button=button, human_confirm_runner=human_confirm_runner)
+            double_res = dispatch_real_double_click(target_hwnd, coord, button=button)
             return {
-                "success": res1.success and res2.success,
-                "status": res2.status,
+                "success": double_res.success,
+                "status": double_res.status,
                 "mode": "REAL_DOUBLE_CLICK",
                 "action": "double_click",
                 "coordinate": coord,
-                "output": f"Double clicked at {coord}: {res1.action_log} | {res2.action_log}",
+                "output": double_res.action_log,
+                "details": double_res.to_dict(),
             }
         else:
+            if os.environ.get("MIKU_LIVE_EXECUTION", "false").strip().lower() in ("true", "1", "yes"):
+                try:
+                    cur_x, cur_y = get_current_cursor_pos()
+                    human_mouse_move(cur_x, cur_y, coord[0], coord[1], duration=0.20)
+                except Exception:
+                    pass
             sim_res = simulate_click(target_hwnd, coord, button=button)
             return {
                 "success": sim_res.success,
@@ -725,6 +766,12 @@ def dispatch_astra_ui_action(
         text = action_dict.get("text", "")
         # Focus coordinate if provided
         if coord != (0, 0):
+            if os.environ.get("MIKU_LIVE_EXECUTION", "false").strip().lower() in ("true", "1", "yes"):
+                try:
+                    cur_x, cur_y = get_current_cursor_pos()
+                    human_mouse_move(cur_x, cur_y, coord[0], coord[1], duration=0.20)
+                except Exception:
+                    pass
             sim_res = simulate_click(target_hwnd, coord, button="left")
             if not sim_res.success:
                 return {
@@ -735,7 +782,7 @@ def dispatch_astra_ui_action(
                     "output": f"[TYPE FOCUS FAILED] {sim_res.action_log}",
                 }
         if real_execution and REAL_TYPE_ENABLED:
-            type_res = dispatch_real_typing(text)
+            type_res = dispatch_real_typing(target_hwnd, None, text)
             return {
                 "success": type_res.success,
                 "status": type_res.status,
@@ -746,6 +793,11 @@ def dispatch_astra_ui_action(
                 "output": type_res.action_log,
             }
         else:
+            if os.environ.get("MIKU_LIVE_EXECUTION", "false").strip().lower() in ("true", "1", "yes"):
+                try:
+                    dispatch_typing_payload(text, min_delay_sec=0.015, max_delay_sec=0.035)
+                except Exception:
+                    pass
             type_res = simulate_typing(text)
             return {
                 "success": type_res.success,

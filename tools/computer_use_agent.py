@@ -38,11 +38,13 @@ from tools.screen_inspector import (
     ClickVerificationResult,
     check_autonomous_authorization,
     REAL_CLICK_ENABLED,
+    human_mouse_move,
 )
 from tools.typing_automation import (
     sanitize_typing_payload,
     simulate_typing,
     dispatch_real_typing,
+    dispatch_human_keystrokes,
     REAL_TYPE_ENABLED,
     INPUT,
     INPUT_KEYBOARD,
@@ -390,31 +392,7 @@ def dispatch_computer_use_action(
             REAL_TYPE_ENABLED or tools.typing_automation.REAL_TYPE_ENABLED or check_autonomous_authorization("TYPE")
         )
         if allow_real_typing:
-            # Dispatch Unicode keystrokes via Win32 SendInput
-            typed_count = 0
-            for ch in safe_text:
-                char_code = ord(ch)
-                inp_down = INPUT()
-                inp_down.type = INPUT_KEYBOARD
-                inp_down.ki.wVk = 0
-                inp_down.ki.wScan = char_code
-                inp_down.ki.dwFlags = KEYEVENTF_UNICODE
-                inp_down.ki.time = 0
-                inp_down.ki.dwExtraInfo = None
-
-                inp_up = INPUT()
-                inp_up.type = INPUT_KEYBOARD
-                inp_up.ki.wVk = 0
-                inp_up.ki.wScan = char_code
-                inp_up.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP
-                inp_up.ki.time = 0
-                inp_up.ki.dwExtraInfo = None
-
-                inputs = (INPUT * 2)(inp_down, inp_up)
-                user32.SendInput(2, inputs, ctypes.sizeof(INPUT))
-                typed_count += 1
-                time.sleep(0.01)
-
+            typed_count = dispatch_human_keystrokes(safe_text, min_delay_sec=0.015, max_delay_sec=0.035)
             return ComputerUseStepResult(
                 step=0,
                 action=action_dict,
@@ -429,21 +407,21 @@ def dispatch_computer_use_action(
                 action=action_dict,
                 success=True,
                 status="SIMULATED_TYPE_SUCCESS",
-                output=f"[SIMULATED TYPING] Would type {len(safe_text)} characters: '{safe_text[:30]}'",
-                details={"sanitized_text": safe_text, "real_input": False},
+                output=f"[SIMULATED TYPING] Would type '{safe_text[:30]}'",
+                details={"text": safe_text, "real_input": False},
             )
 
-    # 5. Spatial Mouse Actions: click & double_click
-    if action_verb in ("click", "double_click"):
-        x = action_dict.get("x", 0)
-        y = action_dict.get("y", 0)
+    # 5. Spatial Click & Double Click (Grounded through Pre-Click Safety Verification)
+    if action_verb in ("click", "double_click", "move", "hover"):
+        x = int(action_dict.get("x", 0))
+        y = int(action_dict.get("y", 0))
         coord = (x, y)
         button = action_dict.get("button", "left")
 
-        resolved_hwnd = target_hwnd if target_hwnd is not None else resolve_target_hwnd_at_point(x, y)
+        resolved_hwnd = target_hwnd if target_hwnd is not None else user32.GetDesktopWindow()
 
-        # UNCONDITIONAL SAFETY GATE: verify_element_clickable
-        verif = verify_element_clickable(resolved_hwnd, coord)
+        # Unconditional Pre-Click Verification
+        verif: ClickVerificationResult = verify_element_clickable(resolved_hwnd, coord)
         if not verif.is_safe:
             return ComputerUseStepResult(
                 step=0,
@@ -458,14 +436,45 @@ def dispatch_computer_use_action(
                 verification=verif,
             )
 
-        if action_verb == "click":
-            if real_execution and REAL_CLICK_ENABLED:
-                user32.SetCursorPos(x, y)
+        allow_real_click = real_execution and (
+            REAL_CLICK_ENABLED
+            or tools.screen_inspector.REAL_CLICK_ENABLED
+            or check_autonomous_authorization("CLICK")
+            or check_autonomous_authorization("COMPUTER_USE")
+        )
+
+        if action_verb in ("move", "hover"):
+            if allow_real_click:
+                human_mouse_move(None, None, x, y, duration=0.20)
                 time.sleep(0.05)
+                return ComputerUseStepResult(
+                    step=0,
+                    action=action_dict,
+                    success=True,
+                    status="REAL_HOVER_SUCCESS",
+                    output=f"[REAL HOVER] Hovered over {coord}",
+                    details={"coordinate": coord, "real_input": True},
+                    verification=verif,
+                )
+            else:
+                return ComputerUseStepResult(
+                    step=0,
+                    action=action_dict,
+                    success=True,
+                    status="SIMULATED_HOVER_SUCCESS",
+                    output=f"[SIMULATED HOVER] Would hover over {coord}",
+                    details={"coordinate": coord, "real_input": False},
+                    verification=verif,
+                )
+
+        elif action_verb == "click":
+            if allow_real_click:
+                human_mouse_move(None, None, x, y, duration=0.20)
+                time.sleep(0.02)
                 down_flag = 0x0008 if button.lower() == "right" else 0x0002
                 up_flag = 0x0010 if button.lower() == "right" else 0x0004
                 user32.mouse_event(down_flag, 0, 0, 0, 0)
-                time.sleep(0.05)
+                time.sleep(0.025)
                 user32.mouse_event(up_flag, 0, 0, 0, 0)
                 return ComputerUseStepResult(
                     step=0,
@@ -489,15 +498,15 @@ def dispatch_computer_use_action(
                 )
 
         elif action_verb == "double_click":
-            if real_execution and REAL_CLICK_ENABLED:
-                user32.SetCursorPos(x, y)
-                time.sleep(0.05)
+            if allow_real_click:
+                human_mouse_move(None, None, x, y, duration=0.20)
+                time.sleep(0.02)
                 user32.mouse_event(0x0002, 0, 0, 0, 0)
-                time.sleep(0.05)
+                time.sleep(0.02)
                 user32.mouse_event(0x0004, 0, 0, 0, 0)
                 time.sleep(0.05)
                 user32.mouse_event(0x0002, 0, 0, 0, 0)
-                time.sleep(0.05)
+                time.sleep(0.02)
                 user32.mouse_event(0x0004, 0, 0, 0, 0)
                 return ComputerUseStepResult(
                     step=0,

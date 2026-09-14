@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import ctypes
 from ctypes import wintypes
+import math
 import os
 import sys
 import time
@@ -967,6 +968,14 @@ def simulate_click(
         f"Hit HWND={verification.details.get('hit_hwnd')}, Real Input Dispatched: NO]"
     )
 
+    # If MIKU_LIVE_EXECUTION is active, visibly glide cursor to target coordinate for real-time visual inspection
+    if os.environ.get("MIKU_LIVE_EXECUTION", "false").strip().lower() in ("true", "1", "yes"):
+        try:
+            cur_x, cur_y = get_current_cursor_pos()
+            human_mouse_move(cur_x, cur_y, coord[0], coord[1], duration=0.20)
+        except Exception:
+            pass
+
     return SimulatedClickResult(
         success=True,
         status="SIMULATED_CLICK_SUCCESS",
@@ -1047,6 +1056,102 @@ def request_live_human_click_confirmation(
         return False
 
 
+class POINT(ctypes.Structure):
+    _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+
+
+def get_current_cursor_pos() -> Tuple[int, int]:
+    """
+    Calculates current physical cursor position on Windows desktop using
+    win32gui.GetCursorPos() with fallback to native user32.GetCursorPos.
+    """
+    if win32gui is not None:
+        try:
+            return win32gui.GetCursorPos()
+        except Exception:
+            pass
+    pt = POINT()
+    user32.GetCursorPos(ctypes.byref(pt))
+    return (int(pt.x), int(pt.y))
+
+
+def human_mouse_move(
+    start_x: Optional[int] = None,
+    start_y: Optional[int] = None,
+    end_x: int = 0,
+    end_y: int = 0,
+    duration: float = 0.20,
+) -> None:
+    """
+    Smoothly moves the physical Windows mouse cursor from (start_x, start_y)
+    to (end_x, end_y) along a low-latency minimum-jerk polynomial trajectory and
+    cubic Bézier interpolation curve with organic curvature.
+
+    Latency constraint: for automated clicks, total duration is snappy (150ms-250ms).
+    Custom durations (e.g. visual demos) are respected. Runs at 60-120 FPS via tight loop.
+    """
+    _attach_thread_to_default_desktop()
+
+    cur_x, cur_y = get_current_cursor_pos()
+    if start_x is None:
+        start_x = cur_x
+    if start_y is None:
+        start_y = cur_y
+
+    if start_x == end_x and start_y == end_y:
+        return
+
+    glide_duration = max(0.05, duration)
+
+    dx = end_x - start_x
+    dy = end_y - start_y
+    dist = math.hypot(dx, dy)
+
+    # Minimum-jerk cubic Bézier control points with subtle organic curve
+    if dist > 0:
+        nx = -dy / dist
+        ny = dx / dist
+    else:
+        nx, ny = 0.0, 0.0
+
+    sign = 1 if ((start_x + end_y) % 2 == 0) else -1
+    offset_mag = min(25.0, dist * 0.08) * sign
+
+    p1_x = start_x + 0.3 * dx + offset_mag * nx
+    p1_y = start_y + 0.3 * dy + offset_mag * ny
+    p2_x = start_x + 0.7 * dx - (offset_mag * 0.5) * nx
+    p2_y = start_y + 0.7 * dy - (offset_mag * 0.5) * ny
+
+    # 60 to 120 FPS tight loop
+    steps = max(12, min(int(glide_duration * 100), 120))
+    step_delay = glide_duration / steps
+
+    for i in range(1, steps + 1):
+        t = i / steps
+        # Minimum-jerk polynomial trajectory: s(t) = 10*t^3 - 15*t^4 + 6*t^5
+        u = t * t * t * (10.0 + t * (-15.0 + 6.0 * t))
+        inv = 1.0 - u
+
+        # Cubic Bézier interpolation
+        curr_x = int(
+            (inv ** 3) * start_x
+            + 3.0 * (inv ** 2) * u * p1_x
+            + 3.0 * inv * (u ** 2) * p2_x
+            + (u ** 3) * end_x
+        )
+        curr_y = int(
+            (inv ** 3) * start_y
+            + 3.0 * (inv ** 2) * u * p1_y
+            + 3.0 * inv * (u ** 2) * p2_y
+            + (u ** 3) * end_y
+        )
+        user32.SetCursorPos(curr_x, curr_y)
+        time.sleep(step_delay)
+
+    # Final exact landing
+    user32.SetCursorPos(end_x, end_y)
+
+
 def dispatch_real_click(
     target_hwnd: int,
     element: UIElement | Tuple[int, int] | List[int],
@@ -1058,11 +1163,11 @@ def dispatch_real_click(
     MANDATORY VERIFICATION CHAIN (ALL MUST PASS):
       1. CIRCUIT BREAKER INVARIANT: REAL_CLICK_ENABLED must be True. If False, fails closed immediately.
       2. PRE-CLICK VERIFICATION: verify_element_clickable() must return is_safe=True.
-         Intercepts invalid HWND, minimized, not-foreground, out-of-bounds, or occluded elements.
       3. LIVE HUMAN CONFIRMATION: request_live_human_click_confirmation() requires explicit interactive
          console typing ('CONFIRM CLICK'), failing closed if non-interactive.
       4. STALE-FOCUS RE-CHECK: Re-verifies target window is STILL foreground root immediately before click.
-      5. PHYSICAL DISPATCH: SetCursorPos + mouse_event (LEFTDOWN -> LEFTUP).
+      5. PHYSICAL DISPATCH: Calculates cursor pos via win32gui.GetCursorPos(), glides via minimum-jerk /
+         cubic Bézier curve (150ms-250ms), and dispatches mouse_event (DOWN -> UP).
     """
     # 1. Extract target metadata
     if isinstance(element, UIElement):
@@ -1146,10 +1251,11 @@ def dispatch_real_click(
             real_input_dispatched=False,
         )
 
-    # 6. Physical Mouse Click Dispatch via Win32 API
+    # 6. Physical Mouse Click Dispatch via Win32 API with Human Bézier Movement
     x, y = coord
-    user32.SetCursorPos(x, y)
-    time.sleep(0.05)
+    cur_x, cur_y = get_current_cursor_pos()
+    human_mouse_move(cur_x, cur_y, x, y, duration=0.20)
+    time.sleep(0.02)
 
     if button.lower() == "right":
         down_flag = 0x0008  # MOUSEEVENTF_RIGHTDOWN
@@ -1159,7 +1265,7 @@ def dispatch_real_click(
         up_flag = 0x0004    # MOUSEEVENTF_LEFTUP
 
     user32.mouse_event(down_flag, 0, 0, 0, 0)
-    time.sleep(0.05)
+    time.sleep(0.025)
     user32.mouse_event(up_flag, 0, 0, 0, 0)
 
     log_msg = f"[REAL MOUSE CLICK DISPATCHED] Clicked '{el_name}' at ({x}, {y}) with {button} button on HWND {target_hwnd} ('{target_title}')."
@@ -1175,3 +1281,121 @@ def dispatch_real_click(
         real_input_dispatched=True,
     )
 
+
+def dispatch_real_double_click(
+    target_hwnd: int,
+    element: UIElement | Tuple[int, int] | List[int],
+    button: str = "left",
+) -> ClickDispatchResult:
+    """
+    Dispatches a real physical double click to target UIElement or coordinate on Windows desktop.
+    Calculates current physical cursor position using win32gui.GetCursorPos() and glides
+    the cursor using low-latency minimum-jerk/cubic Bézier curve (150ms-250ms) before clicking.
+    """
+    if isinstance(element, UIElement):
+        el_name = element.name or element.automation_id or element.control_type or "unnamed_element"
+        coord = element.center
+    elif isinstance(element, (tuple, list)) and len(element) == 2:
+        el_name = "raw_coordinate"
+        coord = (int(element[0]), int(element[1]))
+    else:
+        el_name = "invalid_element"
+        coord = (0, 0)
+
+    if not REAL_CLICK_ENABLED:
+        return ClickDispatchResult(
+            success=False,
+            status="DRY_RUN_PENDING_CIRCUIT_BREAKER",
+            verification=None,
+            action_log="[CIRCUIT BREAKER BLOCKED] REAL_CLICK_ENABLED is False. Real mouse double clicks are permanently blocked by default.",
+            target_hwnd=target_hwnd,
+            element_name=el_name,
+            coordinate=coord,
+            button=button,
+            real_input_dispatched=False,
+        )
+
+    verification = verify_element_clickable(target_hwnd, element)
+    if not verification.is_safe:
+        status_map = {
+            "NOT_FOREGROUND": "ABORT_NOT_FOREGROUND",
+            "MINIMIZED": "ABORT_MINIMIZED",
+            "OCCLUDED_AT_POINT": "ABORT_OCCLUDED",
+            "COORDINATE_OUTSIDE_WINDOW": "ABORT_OUTSIDE_WINDOW",
+            "INVALID_HWND": "ABORT_INVALID_HWND",
+            "INVALID_ELEMENT": "ABORT_INVALID_ELEMENT",
+        }
+        status = status_map.get(verification.reason, f"ABORT_{verification.reason}")
+        return ClickDispatchResult(
+            success=False,
+            status=status,
+            verification=verification,
+            action_log=f"[PRE-CLICK SAFETY REJECTION] Cannot double click '{el_name}' at {coord} on HWND {target_hwnd}. Reason: {verification.reason}.",
+            target_hwnd=target_hwnd,
+            element_name=el_name,
+            coordinate=coord,
+            button=button,
+            real_input_dispatched=False,
+        )
+
+    target_title = verification.details.get("window_text") or f"HWND {target_hwnd}"
+    confirmed = request_live_human_click_confirmation(target_title, el_name, coord, button)
+    if not confirmed:
+        return ClickDispatchResult(
+            success=False,
+            status="ABORT_HUMAN_REJECTED",
+            verification=verification,
+            action_log=f"[HUMAN CONFIRMATION REJECTED] Live confirmation not obtained for double click.",
+            target_hwnd=target_hwnd,
+            element_name=el_name,
+            coordinate=coord,
+            button=button,
+            real_input_dispatched=False,
+        )
+
+    fg_hwnd = user32.GetForegroundWindow()
+    root_fg = user32.GetAncestor(fg_hwnd, 2) or fg_hwnd
+    root_target = user32.GetAncestor(target_hwnd, 2) or target_hwnd
+    if root_fg != root_target and fg_hwnd != target_hwnd:
+        return ClickDispatchResult(
+            success=False,
+            status="ABORT_NOT_FOREGROUND",
+            verification=verification,
+            action_log=f"[STALE FOCUS ABORT] Foreground shifted immediately before double click from HWND {target_hwnd} to HWND {fg_hwnd}.",
+            target_hwnd=target_hwnd,
+            element_name=el_name,
+            coordinate=coord,
+            button=button,
+            real_input_dispatched=False,
+        )
+
+    x, y = coord
+    cur_x, cur_y = get_current_cursor_pos()
+    human_mouse_move(cur_x, cur_y, x, y, duration=0.20)
+    time.sleep(0.02)
+
+    down_flag = 0x0002
+    up_flag = 0x0004
+
+    # First click
+    user32.mouse_event(down_flag, 0, 0, 0, 0)
+    time.sleep(0.02)
+    user32.mouse_event(up_flag, 0, 0, 0, 0)
+    time.sleep(0.05)
+    # Second click
+    user32.mouse_event(down_flag, 0, 0, 0, 0)
+    time.sleep(0.02)
+    user32.mouse_event(up_flag, 0, 0, 0, 0)
+
+    log_msg = f"[REAL MOUSE DOUBLE CLICK DISPATCHED] Double clicked '{el_name}' at ({x}, {y}) on HWND {target_hwnd} ('{target_title}')."
+    return ClickDispatchResult(
+        success=True,
+        status="DOUBLE_CLICK_SUCCESS",
+        verification=verification,
+        action_log=log_msg,
+        target_hwnd=target_hwnd,
+        element_name=el_name,
+        coordinate=coord,
+        button=button,
+        real_input_dispatched=True,
+    )

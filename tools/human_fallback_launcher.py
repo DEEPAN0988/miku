@@ -86,34 +86,11 @@ def dispatch_unicode_text_to_foreground(
 ) -> int:
     """
     Sends Unicode characters directly to the currently focused Windows UI element
-    using native Win32 SendInput. Does NOT use any third-party macro tools.
+    using native Win32 SendInput with humanized randomized typing cadence.
+    Does NOT use any third-party macro tools.
     """
-    typed = 0
-    for ch in text:
-        char_code = ord(ch)
-
-        inp_down = INPUT()
-        inp_down.type = INPUT_KEYBOARD
-        inp_down.ki.wVk = 0
-        inp_down.ki.wScan = char_code
-        inp_down.ki.dwFlags = KEYEVENTF_UNICODE
-        inp_down.ki.time = 0
-        inp_down.ki.dwExtraInfo = None
-
-        inp_up = INPUT()
-        inp_up.type = INPUT_KEYBOARD
-        inp_up.ki.wVk = 0
-        inp_up.ki.wScan = char_code
-        inp_up.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP
-        inp_up.ki.time = 0
-        inp_up.ki.dwExtraInfo = None
-
-        inputs = (INPUT * 2)(inp_down, inp_up)
-        user32.SendInput(2, inputs, ctypes.sizeof(INPUT))
-        typed += 1
-        if char_delay_sec > 0:
-            time.sleep(char_delay_sec)
-    return typed
+    from tools.typing_automation import dispatch_human_keystrokes
+    return dispatch_human_keystrokes(text, min_delay_sec=0.015, max_delay_sec=0.035)
 
 
 def human_launch_app(

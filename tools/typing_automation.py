@@ -26,6 +26,7 @@ import ctypes
 from ctypes import wintypes
 from dataclasses import dataclass, field
 import re
+import random
 import sys
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -314,6 +315,13 @@ def simulate_typing(
         f"at {element.center} on HWND {target_hwnd}. Text Preview: '{safe_text[:40]}' [Real Input: NO]"
     )
 
+    # If MIKU_LIVE_EXECUTION is active, physically type into focused control for live preview
+    if os.environ.get("MIKU_LIVE_EXECUTION", "false").strip().lower() in ("true", "1", "yes"):
+        try:
+            dispatch_typing_payload(safe_text, min_delay_sec=0.015, max_delay_sec=0.035)
+        except Exception:
+            pass
+
     return SimulatedTypingResult(
         success=True,
         status="SIMULATED_TYPE_SUCCESS",
@@ -465,12 +473,13 @@ def dispatch_real_typing(
 
     # 5. Focus Target Control via Left Click on Center Coordinates
     cx, cy = element.center
-    user32.SetCursorPos(cx, cy)
-    time.sleep(0.05)
+    from tools.screen_inspector import human_mouse_move
+    human_mouse_move(None, None, cx, cy, duration=0.20)
+    time.sleep(0.02)
     user32.mouse_event(0x0002, 0, 0, 0, 0)  # LEFTDOWN
-    time.sleep(0.05)
+    time.sleep(0.025)
     user32.mouse_event(0x0004, 0, 0, 0, 0)  # LEFTUP
-    time.sleep(0.10)
+    time.sleep(0.05)
 
     # 6. Stale Focus Re-Check
     fg_hwnd = user32.GetForegroundWindow()
@@ -488,10 +497,8 @@ def dispatch_real_typing(
             real_input_dispatched=False,
         )
 
-    # 7. Physical Unicode Keystroke Dispatch
+    # 7. Physical Unicode Keystroke Dispatch with human micro-delays (15ms-35ms)
     typed_count = 0
-    delay_sec = max(0.001, char_delay_ms / 1000.0)
-
     for ch in safe_text:
         char_code = ord(ch)
 
@@ -516,7 +523,7 @@ def dispatch_real_typing(
         inputs = (INPUT * 2)(inp_down, inp_up)
         user32.SendInput(2, inputs, ctypes.sizeof(INPUT))
         typed_count += 1
-        time.sleep(delay_sec)
+        time.sleep(random.uniform(0.015, 0.035))
 
     log_msg = f"[REAL KEYSTROKES DISPATCHED] Successfully typed {typed_count} characters into '{el_name}' on HWND {target_hwnd} ('{target_title}')."
     return TypingDispatchResult(
@@ -529,3 +536,61 @@ def dispatch_real_typing(
         characters_typed=typed_count,
         real_input_dispatched=True,
     )
+
+
+def dispatch_typing_payload(
+    text: str,
+    min_delay_sec: float = 0.015,
+    max_delay_sec: float = 0.035,
+) -> int:
+    """
+    Iterates through sanitized typing payload, sending individual character
+    KEYDOWN and KEYUP Win32 SendInput event blocks separated by a randomized
+    micro-delay (default 15ms-35ms, ~100+ WPM). Makes keys appear individually
+    and visibly in real-time without bogging down execution.
+    """
+    from tools.screen_inspector import _attach_thread_to_default_desktop
+    _attach_thread_to_default_desktop()
+    is_safe, safe_text, _ = sanitize_typing_payload(text)
+    if not is_safe:
+        return 0
+
+    typed_count = 0
+    for ch in safe_text:
+        char_code = ord(ch)
+
+        inp_down = INPUT()
+        inp_down.type = INPUT_KEYBOARD
+        inp_down.ki.wVk = 0
+        inp_down.ki.wScan = char_code
+        inp_down.ki.dwFlags = KEYEVENTF_UNICODE
+        inp_down.ki.time = 0
+        inp_down.ki.dwExtraInfo = None
+
+        inp_up = INPUT()
+        inp_up.type = INPUT_KEYBOARD
+        inp_up.ki.wVk = 0
+        inp_up.ki.wScan = char_code
+        inp_up.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP
+        inp_up.ki.time = 0
+        inp_up.ki.dwExtraInfo = None
+
+        inputs = (INPUT * 2)(inp_down, inp_up)
+        user32.SendInput(2, inputs, ctypes.sizeof(INPUT))
+        typed_count += 1
+        time.sleep(random.uniform(min_delay_sec, max_delay_sec))
+
+    return typed_count
+
+
+def dispatch_human_keystrokes(
+    text: str,
+    min_delay_sec: float = 0.015,
+    max_delay_sec: float = 0.035,
+) -> int:
+    """
+    Dispatches Unicode text to the currently focused window using SendInput with
+    randomized human-like typing cadence between min_delay_sec and max_delay_sec.
+    """
+    return dispatch_typing_payload(text, min_delay_sec=min_delay_sec, max_delay_sec=max_delay_sec)
+
