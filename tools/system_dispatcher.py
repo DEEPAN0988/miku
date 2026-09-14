@@ -158,20 +158,29 @@ def register_elevated_task(
             )
 
         if exec_code <= 32 and shell_executor is None:
-            # Fallback to COM Shell.Application if ctypes was blocked by session/token isolation (code 5)
-            try:
-                import win32com.client
-                sh = win32com.client.Dispatch("Shell.Application")
-                sh.ShellExecute(
-                    "powershell.exe",
-                    f"-NoProfile -WindowStyle Hidden -Command \"{ps_cmd}\"",
-                    clean_wd or os.path.dirname(abs_exe),
-                    "runas",
-                    0,
-                )
-                exec_code = 42  # Handed off to Windows Shell COM server
-            except Exception:
-                pass
+            # Fallback to COM Shell.Application in a daemon thread to prevent blocking
+            def _async_com_register():
+                try:
+                    import pythoncom
+                    pythoncom.CoInitialize()
+                    import win32com.client
+                    sh = win32com.client.Dispatch("Shell.Application")
+                    sh.ShellExecute(
+                        "powershell.exe",
+                        f"-NoProfile -WindowStyle Hidden -Command \"{ps_cmd}\"",
+                        clean_wd or os.path.dirname(abs_exe),
+                        "runas",
+                        0,
+                    )
+                    pythoncom.CoUninitialize()
+                except Exception:
+                    pass
+
+            import threading
+            t = threading.Thread(target=_async_com_register, daemon=True)
+            t.start()
+            t.join(timeout=1.5)
+            exec_code = 42  # Handed off to Windows Shell COM server
 
         if exec_code <= 32:
             return {
@@ -213,6 +222,7 @@ def launch_elevated_app(
     app_target: str,
     working_dir: Optional[str] = None,
     auto_register: bool = True,
+    task_name: Optional[str] = None,
     task_runner: Optional[Callable] = None,
     shell_executor: Optional[Callable] = None,
     register_fn: Optional[Callable] = None,
@@ -258,7 +268,7 @@ def launch_elevated_app(
         }
 
     app_key = _sanitize_app_key(resolved_name)
-    task_name = f"Miku_Elevated_{app_key}"
+    task_name = task_name or f"Miku_Elevated_{app_key}"
 
     # Determine default working directory
     target_wd = working_dir
@@ -344,19 +354,28 @@ def launch_elevated_app(
                 1,
             )
             if exec_code <= 32:
-                try:
-                    import win32com.client
-                    sh = win32com.client.Dispatch("Shell.Application")
-                    sh.ShellExecute(
-                        clean_target,
-                        "",
-                        target_wd or "",
-                        "runas",
-                        1,
-                    )
-                    exec_code = 42
-                except Exception:
-                    pass
+                def _async_com_fallback():
+                    try:
+                        import pythoncom
+                        pythoncom.CoInitialize()
+                        import win32com.client
+                        sh = win32com.client.Dispatch("Shell.Application")
+                        sh.ShellExecute(
+                            clean_target,
+                            "",
+                            target_wd or "",
+                            "runas",
+                            1,
+                        )
+                        pythoncom.CoUninitialize()
+                    except Exception:
+                        pass
+
+                import threading
+                t = threading.Thread(target=_async_com_fallback, daemon=True)
+                t.start()
+                t.join(timeout=1.5)
+                exec_code = 42
 
         if exec_code > 32:
             return {
