@@ -121,6 +121,49 @@ class TestActionTranslationLayer(unittest.TestCase):
         self.assertEqual(parsed["x"], 200)
         self.assertEqual(parsed["y"], 150)
 
+    def test_build_vision_payload_with_history(self):
+        client = AstraVisionClient(model="openai/gpt-6-astra")
+        dummy_b64 = "data:image/png;base64,TEST"
+        history = [
+            {"action": {"action": "click", "x": 100, "y": 200}, "success": True, "status": "SUCCESS"},
+            {"action": {"action": "press_key", "key": "enter"}, "success": True, "status": "SUCCESS"},
+        ]
+        payload = client.build_vision_payload(
+            query="Open Settings",
+            base64_image_url=dummy_b64,
+            history=history,
+        )
+        user_content = payload["messages"][1]["content"]
+        self.assertIn("History of previously executed actions:", user_content[0]["text"])
+        self.assertIn("click", user_content[0]["text"])
+        self.assertIn("press_key", user_content[0]["text"])
+
+    def test_parse_expanded_actions(self):
+        # double_click
+        parsed_dc = parse_astra_action('{"action": "double_click", "x": 400, "y": 300}')
+        self.assertTrue(parsed_dc["valid"])
+        self.assertEqual(parsed_dc["action"], "double_click")
+        self.assertEqual(parsed_dc["x"], 400)
+        self.assertEqual(parsed_dc["y"], 300)
+
+        # press_key
+        parsed_pk = parse_astra_action('{"action": "press_key", "key": "enter"}')
+        self.assertTrue(parsed_pk["valid"])
+        self.assertEqual(parsed_pk["action"], "press_key")
+        self.assertEqual(parsed_pk["key"], "enter")
+
+        # wait
+        parsed_w = parse_astra_action('{"action": "wait", "seconds": 2.5}')
+        self.assertTrue(parsed_w["valid"])
+        self.assertEqual(parsed_w["action"], "wait")
+        self.assertEqual(parsed_w["seconds"], 2.5)
+
+        # terminate
+        parsed_term = parse_astra_action('{"action": "terminate", "reason": "Objective reached"}')
+        self.assertTrue(parsed_term["valid"])
+        self.assertEqual(parsed_term["action"], "terminate")
+        self.assertEqual(parsed_term["reason"], "Objective reached")
+
     def test_parse_invalid_payloads(self):
         # Missing action
         self.assertFalse(parse_astra_action('{"x": 10, "y": 20}')["valid"])
@@ -130,6 +173,38 @@ class TestActionTranslationLayer(unittest.TestCase):
         self.assertFalse(parse_astra_action('{"action": "click", "x": "top", "y": 10}')["valid"])
         # Malformed text
         self.assertFalse(parse_astra_action('not a json object')["valid"])
+        # Invalid press_key (missing/empty key)
+        self.assertFalse(parse_astra_action('{"action": "press_key", "key": ""}')["valid"])
+        # Negative wait
+        self.assertFalse(parse_astra_action('{"action": "wait", "seconds": -5}')["valid"])
+
+    def test_dispatch_non_spatial_actions(self):
+        # press_key dispatch
+        res_pk = dispatch_astra_ui_action(
+            target_hwnd=0,
+            action_dict={"valid": True, "action": "press_key", "key": "win"},
+            real_execution=False,
+        )
+        self.assertTrue(res_pk["success"])
+        self.assertEqual(res_pk["status"], "PRESS_KEY_DISPATCHED")
+
+        # wait dispatch
+        res_w = dispatch_astra_ui_action(
+            target_hwnd=0,
+            action_dict={"valid": True, "action": "wait", "seconds": 0.01},
+            real_execution=False,
+        )
+        self.assertTrue(res_w["success"])
+        self.assertEqual(res_w["status"], "WAIT_COMPLETED")
+
+        # terminate dispatch
+        res_term = dispatch_astra_ui_action(
+            target_hwnd=0,
+            action_dict={"valid": True, "action": "terminate", "reason": "Goal done"},
+            real_execution=False,
+        )
+        self.assertTrue(res_term["success"])
+        self.assertEqual(res_term["status"], "TERMINATED")
 
     @patch("tools.orchestrator.verify_element_clickable")
     def test_safety_gate_intercepts_unclickable_element(self, mock_verify):

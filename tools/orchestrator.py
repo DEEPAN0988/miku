@@ -382,15 +382,38 @@ class AstraVisionClient:
         query: str,
         base64_image_url: str,
         system_prompt: Optional[str] = None,
+        history: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
         Builds the OpenAI-compatible multimodal chat completions payload with base64 image data URL.
+        Instructs the model on generalized multi-step computer use actions.
         """
-        sys_msg = system_prompt or (
-            "You are Miku OS Vision Navigation Engine. Given the user's intent and desktop screenshot, "
-            "locate the target element and respond ONLY with a JSON object: "
-            '{"action": "click", "x": <int>, "y": <int>} or {"action": "type", "text": "<str>", "x": <int>, "y": <int>}'
+        default_sys_msg = (
+            "You are Miku OS Vision Navigation & Computer Use Engine powered by gpt-6-astra.\n"
+            "Given the user's objective, desktop screenshot, and action history, determine the next action.\n"
+            "Respond ONLY with a valid JSON object matching exactly one of these schemas:\n"
+            '  {"action": "click", "x": <int>, "y": <int>}\n'
+            '  {"action": "double_click", "x": <int>, "y": <int>}\n'
+            '  {"action": "type", "text": "<str>"}\n'
+            '  {"action": "press_key", "key": "<str>"}\n'
+            '  {"action": "wait", "seconds": <float>}\n'
+            '  {"action": "terminate", "reason": "<str>"}\n'
+            "Rules:\n"
+            "1. Coordinates x and y must be integers corresponding to desktop pixel coordinates.\n"
+            "2. For press_key, use standard key names (e.g. 'enter', 'win', 'esc', 'tab', 'backspace', 'space').\n"
+            "3. Use terminate when the objective is fully achieved or cannot proceed.\n"
+            "4. Return ONLY the JSON object, with no markdown or explanatory commentary."
         )
+        sys_msg = system_prompt or default_sys_msg
+
+        user_text = query
+        if history:
+            user_text += "\n\nHistory of previously executed actions:"
+            for i, h in enumerate(history, 1):
+                act_str = json.dumps(h.get("action", h))
+                status = h.get("status", "SUCCESS" if h.get("success") else "FAILED")
+                user_text += f"\n  Step {i}: {act_str} -> {status}"
+
         return {
             "model": self.model,
             "messages": [
@@ -401,7 +424,7 @@ class AstraVisionClient:
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": query},
+                        {"type": "text", "text": user_text},
                         {
                             "type": "image_url",
                             "image_url": {"url": base64_image_url},
@@ -417,12 +440,14 @@ class AstraVisionClient:
         self,
         query: str,
         base64_image_url: str,
+        system_prompt: Optional[str] = None,
+        history: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         """
         Dispatches multimodal vision request to model endpoint.
         Uses api_runner if provided, otherwise calls standard HTTP endpoint.
         """
-        payload = self.build_vision_payload(query, base64_image_url)
+        payload = self.build_vision_payload(query, base64_image_url, system_prompt=system_prompt, history=history)
         if self.api_runner is not None:
             return self.api_runner(payload)
 
@@ -440,12 +465,27 @@ class AstraVisionClient:
             return data["choices"][0]["message"]["content"]
 
 
+SUPPORTED_ASTRA_ACTIONS = (
+    "click",
+    "double_click",
+    "type",
+    "press_key",
+    "wait",
+    "terminate",
+    "move",
+)
+
+
 def parse_astra_action(response: str | Dict[str, Any]) -> Dict[str, Any]:
     """
     Parses structured JSON commands for UI navigation from Astra model output.
     Expected schemas:
       {"action": "click", "x": 527, "y": 349}
-      {"action": "type", "text": "foo", "x": 527, "y": 349}
+      {"action": "double_click", "x": 527, "y": 349}
+      {"action": "type", "text": "foo"}
+      {"action": "press_key", "key": "enter"}
+      {"action": "wait", "seconds": 2.5}
+      {"action": "terminate", "reason": "Objective achieved"}
       {"action": "move", "x": 527, "y": 349}
     """
     if isinstance(response, dict):
@@ -459,7 +499,7 @@ def parse_astra_action(response: str | Dict[str, Any]) -> Dict[str, Any]:
         try:
             raw_data = json.loads(clean)
         except json.JSONDecodeError:
-            # Fallback regex extraction for {"action": ..., "x": ..., "y": ...}
+            # Fallback regex extraction for {"action": ...}
             match = re.search(r"\{[^{}]*\"action\"[^{}]*\}", clean)
             if match:
                 try:
@@ -475,24 +515,65 @@ def parse_astra_action(response: str | Dict[str, Any]) -> Dict[str, Any]:
         return {"valid": False, "error": "NOT_A_DICT", "raw": raw_data}
 
     action = str(raw_data.get("action", "")).lower().strip()
-    if action not in ("click", "type", "move"):
+    if action not in SUPPORTED_ASTRA_ACTIONS:
         return {"valid": False, "error": f"UNSUPPORTED_ACTION_{action.upper()}", "raw": raw_data}
 
-    try:
-        x = int(raw_data.get("x", 0))
-        y = int(raw_data.get("y", 0))
-    except (ValueError, TypeError):
-        return {"valid": False, "error": "NON_INTEGER_COORDINATES", "raw": raw_data}
-
-    parsed = {
+    parsed: Dict[str, Any] = {
         "valid": True,
         "action": action,
-        "x": x,
-        "y": y,
-        "button": raw_data.get("button", "left"),
-        "text": raw_data.get("text", ""),
         "raw": raw_data,
     }
+
+    if action in ("click", "double_click", "move"):
+        if "x" not in raw_data or "y" not in raw_data:
+            return {"valid": False, "error": "MISSING_COORDINATES", "raw": raw_data}
+        try:
+            x = int(raw_data.get("x", 0))
+            y = int(raw_data.get("y", 0))
+        except (ValueError, TypeError):
+            return {"valid": False, "error": "NON_INTEGER_COORDINATES", "raw": raw_data}
+        parsed["x"] = x
+        parsed["y"] = y
+        parsed["button"] = raw_data.get("button", "left")
+
+    elif action == "type":
+        text = raw_data.get("text")
+        if text is None or not isinstance(text, str):
+            return {"valid": False, "error": "INVALID_TEXT_PAYLOAD", "raw": raw_data}
+        parsed["text"] = text
+        if "x" in raw_data and "y" in raw_data:
+            try:
+                parsed["x"] = int(raw_data["x"])
+                parsed["y"] = int(raw_data["y"])
+            except (ValueError, TypeError):
+                parsed["x"] = 0
+                parsed["y"] = 0
+        else:
+            parsed["x"] = 0
+            parsed["y"] = 0
+
+    elif action == "press_key":
+        key = raw_data.get("key")
+        if key is None or not isinstance(key, str) or not key.strip():
+            return {"valid": False, "error": "INVALID_KEY_PAYLOAD", "raw": raw_data}
+        parsed["key"] = key.strip().lower()
+
+    elif action == "wait":
+        seconds = raw_data.get("seconds")
+        try:
+            sec_val = float(seconds)
+            if sec_val < 0:
+                return {"valid": False, "error": "NEGATIVE_WAIT_SECONDS", "raw": raw_data}
+            parsed["seconds"] = sec_val
+        except (ValueError, TypeError):
+            return {"valid": False, "error": "NON_NUMERIC_SECONDS", "raw": raw_data}
+
+    elif action == "terminate":
+        reason = raw_data.get("reason", "")
+        if not isinstance(reason, str):
+            reason = str(reason)
+        parsed["reason"] = reason
+
     return parsed
 
 
@@ -519,13 +600,49 @@ def dispatch_astra_ui_action(
             "output": f"[ASTRA ACTION REJECTION] Invalid action payload: {action_dict.get('error')}",
         }
 
-    x = action_dict["x"]
-    y = action_dict["y"]
-    coord = (x, y)
     action_verb = action_dict["action"]
+
+    # Handle actions that do not require spatial coordinates
+    if action_verb == "press_key":
+        key = action_dict.get("key", "")
+        return {
+            "success": True,
+            "status": "PRESS_KEY_DISPATCHED",
+            "mode": "REAL_KEY" if real_execution else "SIMULATED_KEY",
+            "action": "press_key",
+            "key": key,
+            "output": f"Dispatched key '{key}'",
+        }
+
+    if action_verb == "wait":
+        seconds = action_dict.get("seconds", 1.0)
+        if real_execution:
+            time.sleep(min(seconds, 10.0))
+        return {
+            "success": True,
+            "status": "WAIT_COMPLETED",
+            "mode": "REAL_WAIT" if real_execution else "SIMULATED_WAIT",
+            "action": "wait",
+            "seconds": seconds,
+            "output": f"Waited {seconds} seconds",
+        }
+
+    if action_verb == "terminate":
+        reason = action_dict.get("reason", "")
+        return {
+            "success": True,
+            "status": "TERMINATED",
+            "action": "terminate",
+            "reason": reason,
+            "output": f"Task terminated by model: {reason}",
+        }
+
+    x = action_dict.get("x", 0)
+    y = action_dict.get("y", 0)
+    coord = (x, y)
     button = action_dict.get("button", "left")
 
-    # Step 1: Intercept through local safety gate verify_element_clickable
+    # Step 1: Intercept through local safety gate verify_element_clickable for spatial actions
     click_verif = verify_element_clickable(target_hwnd, coord)
     if not click_verif.is_safe:
         return {
@@ -573,18 +690,43 @@ def dispatch_astra_ui_action(
                 "output": sim_res.action_log,
                 "details": sim_res.to_dict(),
             }
+    elif action_verb == "double_click":
+        if real_execution and REAL_CLICK_ENABLED:
+            res1 = dispatch_real_click(target_hwnd, coord, button=button, human_confirm_runner=human_confirm_runner)
+            time.sleep(0.05)
+            res2 = dispatch_real_click(target_hwnd, coord, button=button, human_confirm_runner=human_confirm_runner)
+            return {
+                "success": res1.success and res2.success,
+                "status": res2.status,
+                "mode": "REAL_DOUBLE_CLICK",
+                "action": "double_click",
+                "coordinate": coord,
+                "output": f"Double clicked at {coord}: {res1.action_log} | {res2.action_log}",
+            }
+        else:
+            sim_res = simulate_click(target_hwnd, coord, button=button)
+            return {
+                "success": sim_res.success,
+                "status": sim_res.status,
+                "mode": "SIMULATED_DOUBLE_CLICK",
+                "action": "double_click",
+                "coordinate": coord,
+                "output": f"[SIMULATED DOUBLE CLICK] {sim_res.action_log}",
+                "details": sim_res.to_dict(),
+            }
     elif action_verb == "type":
         text = action_dict.get("text", "")
-        # First simulate click to focus coordinate
-        sim_res = simulate_click(target_hwnd, coord, button="left")
-        if not sim_res.success:
-            return {
-                "success": False,
-                "status": sim_res.status,
-                "action": "type",
-                "coordinate": coord,
-                "output": f"[TYPE FOCUS FAILED] {sim_res.action_log}",
-            }
+        # Focus coordinate if provided
+        if coord != (0, 0):
+            sim_res = simulate_click(target_hwnd, coord, button="left")
+            if not sim_res.success:
+                return {
+                    "success": False,
+                    "status": sim_res.status,
+                    "action": "type",
+                    "coordinate": coord,
+                    "output": f"[TYPE FOCUS FAILED] {sim_res.action_log}",
+                }
         if real_execution and REAL_TYPE_ENABLED:
             type_res = dispatch_real_typing(text)
             return {
