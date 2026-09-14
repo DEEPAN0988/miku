@@ -797,9 +797,10 @@ def verify_element_clickable(
 # ==============================================================================
 # PERMANENT SAFETY CIRCUIT BREAKER (DEFENSE IN DEPTH)
 # ==============================================================================
-# REAL MOUSE/INPUT EXECUTION CIRCUIT BREAKER.
-# Explicitly authorized and enabled by user for Phase C canary click execution.
-REAL_CLICK_ENABLED: bool = True
+# REAL MOUSE/INPUT EXECUTION IS HARD-CODED TO FALSE.
+# Real input injection (SendInput, mouse_event, keybd_event) is strictly prohibited.
+# This flag blocks any real click execution at the lowest level, mirroring tools/messaging.py.
+REAL_CLICK_ENABLED: bool = False
 
 
 @dataclass
