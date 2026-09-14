@@ -636,6 +636,46 @@ class ClickVerificationResult:
         }
 
 
+def set_window_foreground_passive(hwnd: int, timeout_s: float = 2.0) -> bool:
+    """
+    Passively sets target window as foreground using standard Win32 thread attachment.
+    ZERO keystrokes, ZERO simulated clicks, ZERO SendInput.
+    """
+    _attach_thread_to_default_desktop()
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+    user32.AllowSetForegroundWindow(-1)
+    t0 = time.perf_counter()
+    SW_RESTORE = 9
+    SW_SHOW = 5
+    while time.perf_counter() - t0 < timeout_s:
+        fg_hwnd = user32.GetForegroundWindow()
+        root_fg = user32.GetAncestor(fg_hwnd, 2) or fg_hwnd
+        root_target = user32.GetAncestor(hwnd, 2) or hwnd
+        if fg_hwnd == hwnd or root_fg == hwnd or root_fg == root_target:
+            return True
+
+        fg_tid = user32.GetWindowThreadProcessId(fg_hwnd, None)
+        target_tid = user32.GetWindowThreadProcessId(hwnd, None)
+        cur_tid = kernel32.GetCurrentThreadId()
+
+        user32.AttachThreadInput(cur_tid, fg_tid, True)
+        user32.AttachThreadInput(cur_tid, target_tid, True)
+        user32.ShowWindow(hwnd, SW_RESTORE)
+        user32.ShowWindow(hwnd, SW_SHOW)
+        user32.BringWindowToTop(hwnd)
+        user32.SetForegroundWindow(hwnd)
+        user32.AttachThreadInput(cur_tid, target_tid, False)
+        user32.AttachThreadInput(cur_tid, fg_tid, False)
+
+        time.sleep(0.05)
+
+    fg_final = user32.GetForegroundWindow()
+    root_final = user32.GetAncestor(fg_final, 2) or fg_final
+    root_target = user32.GetAncestor(hwnd, 2) or hwnd
+    return (fg_final == hwnd or root_final == hwnd or root_final == root_target)
+
+
 def verify_element_clickable(
     target_hwnd: int,
     element: UIElement | Tuple[int, int] | List[int],

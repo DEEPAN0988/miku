@@ -42,6 +42,7 @@ from tools.screen_inspector import (
     check_autonomous_authorization,
     REAL_CLICK_ENABLED,
     human_mouse_move,
+    set_window_foreground_passive,
 )
 from tools.typing_automation import (
     sanitize_typing_payload,
@@ -268,10 +269,11 @@ def dispatch_computer_use_action(
     real_execution: bool = False,
     target_hwnd: Optional[int] = None,
 ) -> ComputerUseStepResult:
-    """
-    Dispatches a parsed JSON action to Miku's native Win32 primitives with full safety interception.
-    """
     action_verb = action_dict.get("action", "")
+    if action_verb == "right_click":
+        action_verb = "click"
+        if "button" not in action_dict:
+            action_dict["button"] = "right"
 
     # 1. Termination
     if action_verb == "terminate":
@@ -421,7 +423,21 @@ def dispatch_computer_use_action(
         coord = (x, y)
         button = action_dict.get("button", "left")
 
-        resolved_hwnd = target_hwnd if target_hwnd is not None else user32.GetDesktopWindow()
+        if target_hwnd is not None:
+            resolved_hwnd = target_hwnd
+        else:
+            resolved_hwnd = resolve_target_hwnd_at_point(x, y)
+            if not resolved_hwnd or not user32.IsWindow(resolved_hwnd):
+                resolved_hwnd = user32.GetForegroundWindow() or user32.GetDesktopWindow()
+
+        # If real execution is active and target window is not currently foreground,
+        # passively bring it to foreground so pre-click safety verification passes without race conditions.
+        if real_execution and resolved_hwnd and user32.IsWindow(resolved_hwnd):
+            fg_now = user32.GetForegroundWindow()
+            root_fg = user32.GetAncestor(fg_now, 2) or fg_now
+            root_resolved = user32.GetAncestor(resolved_hwnd, 2) or resolved_hwnd
+            if fg_now != resolved_hwnd and root_fg != root_resolved:
+                set_window_foreground_passive(resolved_hwnd, timeout_s=0.5)
 
         # Unconditional Pre-Click Verification
         verif: ClickVerificationResult = verify_element_clickable(resolved_hwnd, coord)

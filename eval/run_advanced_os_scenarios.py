@@ -101,13 +101,13 @@ def get_current_theme_mode() -> Dict[str, Any]:
         return {"error": str(e), "is_dark": True}
 
 
-def run_scenario_1(desktop_dir: Path, client: AstraVisionClient) -> Tuple[bool, str, ComputerUseTaskResult]:
+def run_scenario_1(desktop_dir: Path, client: AstraVisionClient, real_execution: bool = False) -> Tuple[bool, str, ComputerUseTaskResult]:
     """Runs and validates Scenario 1: OS Settings Toggle."""
     res = run_computer_use_task(
         objective=SCENARIO_1_PROMPT,
         client=client,
-        real_execution=False,
-        delay_between_steps=0.2,
+        real_execution=real_execution,
+        delay_between_steps=0.25 if real_execution else 0.2,
     )
 
     theme_info = get_current_theme_mode()
@@ -131,7 +131,7 @@ SCENARIO_2_PROMPT = (
 )
 
 
-def run_scenario_2(desktop_dir: Path, client: AstraVisionClient) -> Tuple[bool, str, ComputerUseTaskResult]:
+def run_scenario_2(desktop_dir: Path, client: AstraVisionClient, real_execution: bool = False) -> Tuple[bool, str, ComputerUseTaskResult]:
     """Runs and validates Scenario 2: IDE Project Bootstrapper."""
     project_dir = Path.home() / "system-life-os"
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -142,8 +142,8 @@ def run_scenario_2(desktop_dir: Path, client: AstraVisionClient) -> Tuple[bool, 
     res = run_computer_use_task(
         objective=SCENARIO_2_PROMPT,
         client=client,
-        real_execution=False,
-        delay_between_steps=0.2,
+        real_execution=real_execution,
+        delay_between_steps=0.25 if real_execution else 0.2,
     )
 
     if not project_dir.exists():
@@ -164,7 +164,7 @@ SCENARIO_3_PROMPT = (
 )
 
 
-def run_scenario_3(desktop_dir: Path, client: AstraVisionClient) -> Tuple[bool, str, ComputerUseTaskResult]:
+def run_scenario_3(desktop_dir: Path, client: AstraVisionClient, real_execution: bool = False) -> Tuple[bool, str, ComputerUseTaskResult]:
     """Runs and validates Scenario 3: Web Research & Asset Extraction."""
     target_img = desktop_dir / "reference_ui.jpg"
     if target_img.exists():
@@ -176,8 +176,8 @@ def run_scenario_3(desktop_dir: Path, client: AstraVisionClient) -> Tuple[bool, 
     res = run_computer_use_task(
         objective=SCENARIO_3_PROMPT,
         client=client,
-        real_execution=False,
-        delay_between_steps=0.2,
+        real_execution=real_execution,
+        delay_between_steps=0.25 if real_execution else 0.2,
     )
 
     if not target_img.exists():
@@ -304,6 +304,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Miku OS v0.3 — Advanced OS Evaluation Scenarios")
     parser.add_argument("--scenario", choices=["1", "2", "3", "all"], default="all", help="Evaluation scenario to run")
     parser.add_argument("--force-offline", action="store_true", help="Force deterministic offline model runner")
+    parser.add_argument("--real", action="store_true", help="Execute live Win32 inputs (Bézier mouse glides and keystrokes)")
     args = parser.parse_args()
 
     # ANSI colors
@@ -314,6 +315,13 @@ def main() -> int:
     C_BOLD = "\033[1m"
     C_RESET = "\033[0m"
 
+    is_real = args.real or (os.environ.get("MIKU_REAL_EXECUTION", "false").strip().lower() in ("true", "1", "yes"))
+    if is_real:
+        import tools.screen_inspector as si
+        import tools.typing_automation as ta
+        si.REAL_CLICK_ENABLED = True
+        ta.REAL_TYPE_ENABLED = True
+
     desktop_dir = resolve_desktop_path()
     has_api_key = bool(os.environ.get("OPENAI_API_KEY")) and not args.force_offline
 
@@ -321,6 +329,7 @@ def main() -> int:
     print(f" {C_BOLD}{C_CYAN}MIKU OS v0.3 — ADVANCED REAL-WORLD OS SCENARIO EVALUATION{C_RESET}", flush=True)
     print("=" * 90, flush=True)
     print(f" [*] Autonomous Unlock : {C_GREEN}ACTIVE{C_RESET} (MIKU_LIVE_EXECUTION=true, MIKU_AUTONOMOUS_MODE=true)", flush=True)
+    print(f" [*] Real Execution    : {C_GREEN if is_real else C_YELLOW}{'LIVE WIN32 (Bézier + Typing)' if is_real else 'SIMULATION'}{C_RESET}", flush=True)
     print(f" [*] Model Target      : openai/gpt-6-astra ({'Live API' if has_api_key else 'Autonomous Deterministic Runner'})", flush=True)
     print(f" [*] Desktop Folder    : {desktop_dir}", flush=True)
     print(f" [*] Emergency Stop    : {C_YELLOW}Hit CTRL+C in terminal at any time to instantly kill hooks and abort.{C_RESET}", flush=True)
@@ -352,7 +361,7 @@ def main() -> int:
                 )
 
             t0 = time.perf_counter()
-            passed, detail, task_res = run_fn(desktop_dir, client)
+            passed, detail, task_res = run_fn(desktop_dir, client, real_execution=is_real)
             dur_sec = time.perf_counter() - t0
 
             tag = f"{C_GREEN}[PASS]{C_RESET}" if passed else f"{C_RED}[FAIL]{C_RESET}"
