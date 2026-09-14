@@ -4,9 +4,10 @@ miku.py — Interactive OS Agent Command-Line Interface (REPL)
 Main interactive entry point for the Miku OS Agent:
   - Uninhibited full autonomous live control: Bézier cursor glides and humanized typing.
   - Interactive REPL loop prompting with 'Miku > '.
-  - Routes arbitrary user commands directly into run_computer_use_task().
-  - Live Astra multimodal reasoning when OPENAI_API_KEY is available, with dynamic
-    heuristic intent translation when operating offline.
+  - 100% Native In-Process VLM: Powered by PyTorch & Transformers (vikhyatk/moondream2)
+    with dynamic CUDA/bfloat16 acceleration for direct visual element grounding and clicking.
+  - Multi-Step Computer Use: Seamless routing to live Astra API (when OPENAI_API_KEY is present)
+    or local Ollama Vision bridge (llama3.2-vision) with zero fake mocks.
 """
 
 from __future__ import annotations
@@ -37,6 +38,13 @@ import tools.typing_automation as typing_automation
 import tools.orchestrator as orchestrator
 from tools.computer_use_agent import run_computer_use_task, ComputerUseTaskResult
 from tools.orchestrator import AstraVisionClient
+from tools.local_vision import (
+    get_action_coordinates,
+    capture_desktop_pil,
+    ground_and_click_target,
+    HAS_VISION_DEPS,
+    get_acceleration_device_and_dtype,
+)
 
 screen_inspector.REAL_CLICK_ENABLED = True
 typing_automation.REAL_TYPE_ENABLED = True
@@ -49,11 +57,12 @@ BANNER = r"""
  |  \/  |_   _| |/ / | | |
  | |\/| | | | | ' /| | | |   MIKU OS AGENT — v0.3.5
  | |  | |_| |_| . \| |_| |   Autonomous Computer Use & Vision Engine
- |_|  |_|_____|_|\_\\___/    Powered by gpt-6-astra
+ |_|  |_|_____|_|\_\\___/    Native In-Process VLM + Multimodal Bridge
 ===============================================================================
  [*] Win32 Humanizer     : ACTIVE (Cubic Bézier Glides & Micro-Delayed Typing)
+ [*] In-Process VLM      : ACTIVE (Moondream2 / PyTorch Native Spatial Grounding)
+ [*] Local Vision Bridge : Ollama (llama3.2-vision) + OpenAI Astra
  [*] Autonomous Mode     : UNLOCKED (Live Non-Blocking OS Control)
- [*] Vision Architecture : Multimodal GDI BitBlt + Dynamic UI Grounding
 ===============================================================================
 """
 
@@ -62,23 +71,36 @@ def print_banner() -> None:
     print(BANNER, flush=True)
     has_api_key = bool(os.environ.get("OPENAI_API_KEY"))
     model = os.environ.get("ASTRA_MODEL", "openai/gpt-6-astra")
-    if has_api_key:
-        print(f"[+] Model Endpoint     : {model} (Live API Key Detected)", flush=True)
+    dev, dtype = get_acceleration_device_and_dtype()
+
+    if HAS_VISION_DEPS:
+        print(f"[+] In-Process VLM     : vikhyatk/moondream2 (device={dev}, dtype={dtype})", flush=True)
     else:
-        print(f"[*] Model Endpoint     : {model} (Offline / Dynamic Heuristic Active)", flush=True)
-        print("    Tip: Use '/key <YOUR_API_KEY>' to connect directly to live Astra API.", flush=True)
+        print("[!] In-Process VLM     : Dependencies missing. Run: pip install torch transformers pillow", flush=True)
+
+    if has_api_key:
+        print(f"[+] Cloud Endpoint     : {model} (Live API Key Detected)", flush=True)
+    else:
+        ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+        ollama_model = os.environ.get("OLLAMA_VISION_MODEL", "llama3.2-vision")
+        print(f"[*] Local Endpoint     : Ollama {ollama_model} @ {ollama_host}", flush=True)
+        print("    Tip: Use '/key <YOUR_API_KEY>' to connect directly to cloud Astra API.", flush=True)
     print("\nType your command below, '/help' for commands, or 'exit' / 'quit' to quit.\n", flush=True)
 
 
 def print_help() -> None:
     print("\n" + "-" * 60, flush=True)
     print("Miku Interactive REPL Commands:", flush=True)
-    print("  <any objective>     Dispatches task to computer use agent", flush=True)
+    print("  <any objective>     Dispatches task to computer use agent loop", flush=True)
     print("                      e.g. 'open notepad and type hello world'", flush=True)
     print("                      e.g. 'open calculator and do 77 multiplied by 3'", flush=True)
+    print("  click <element>     Grounds element with in-process VLM and clicks", flush=True)
+    print("                      e.g. 'click Calculator icon' or 'click Dark mode'", flush=True)
+    print("  /vision <element>   Explicit in-process VLM visual grounding & click", flush=True)
     print("  /key <api_key>      Set or inspect OPENAI_API_KEY in real time", flush=True)
     print("  /model <name>       Set target vision model (default: openai/gpt-6-astra)", flush=True)
-    print("  /status             Show system status & Win32 humanizer configuration", flush=True)
+    print("  /ollama <host>      Set local Ollama host (default: http://localhost:11434)", flush=True)
+    print("  /status             Show system status, VLM hardware acceleration, & humanizer", flush=True)
     print("  /clear              Clear the console screen", flush=True)
     print("  exit / quit         Exit the Miku REPL session", flush=True)
     print("-" * 60, flush=True)
@@ -87,7 +109,11 @@ def print_help() -> None:
 def print_status() -> None:
     has_key = bool(os.environ.get("OPENAI_API_KEY"))
     model = os.environ.get("ASTRA_MODEL", "openai/gpt-6-astra")
+    ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    ollama_model = os.environ.get("OLLAMA_VISION_MODEL", "llama3.2-vision")
     cur_pos = screen_inspector.get_current_cursor_pos()
+    dev, dtype = get_acceleration_device_and_dtype()
+
     print("\n" + "=" * 60, flush=True)
     print("MIKU SYSTEM DIAGNOSTICS & STATUS:", flush=True)
     print(f"  Physical Cursor Pos : {cur_pos}", flush=True)
@@ -95,81 +121,12 @@ def print_status() -> None:
     print(f"  Real Type Enabled   : {typing_automation.REAL_TYPE_ENABLED}", flush=True)
     print(f"  Autonomous Mode     : {os.environ.get('MIKU_AUTONOMOUS_MODE')}", flush=True)
     print(f"  Live Execution      : {os.environ.get('MIKU_LIVE_EXECUTION')}", flush=True)
-    print(f"  Active Vision Model : {model}", flush=True)
-    print(f"  API Key Configured  : {'YES' if has_key else 'NO (Offline heuristic active)'}", flush=True)
+    print(f"  In-Process VLM Deps : {'AVAILABLE' if HAS_VISION_DEPS else 'MISSING'}", flush=True)
+    print(f"  VLM Acceleration    : Device={dev}, DType={dtype}", flush=True)
+    print(f"  Local Ollama Host   : {ollama_host} (Model: {ollama_model})", flush=True)
+    print(f"  Cloud Vision Model  : {model}", flush=True)
+    print(f"  API Key Configured  : {'YES' if has_key else 'NO (Local Ollama bridge active)'}", flush=True)
     print("=" * 60, flush=True)
-
-
-def create_dynamic_intent_runner(prompt: str) -> Callable[[Dict[str, Any]], str]:
-    """
-    Decomposes natural language desktop instructions into structured Win32 actions
-    when running in offline mode without an active OPENAI_API_KEY.
-    """
-    clean_p = prompt.strip()
-    lower_p = clean_p.lower()
-    step_idx = 0
-
-    # 1. Opening application (e.g. "open notepad", "launch calculator", "search for paint")
-    app_target = None
-    open_match = re.search(
-        r"(?:open|launch|start|run|search for)\s+(?:the\s+)?([a-zA-Z0-9_\-\.\s]+?)(?:\s+(?:and|,|then|to)\s+|$)",
-        lower_p,
-    )
-    if open_match:
-        app_target = open_match.group(1).strip()
-
-    # 2. Typing text (e.g. "type hello world", "type 'hello'")
-    type_text = None
-    type_match = re.search(
-        r"(?:type|write|enter|input)\s+['\"]?([^'\"]+?)['\"]?(?:\s+(?:and|,|then)\s+|$)",
-        clean_p,
-        re.IGNORECASE,
-    )
-    if type_match:
-        type_text = type_match.group(1).strip()
-
-    # 3. Arithmetic calculation in Calculator (e.g. "do 77 multiplied by 3", "calculate 72 * 4")
-    calc_expr = None
-    calc_match = re.search(
-        r"(\d+)\s*(?:multiplied by|\*|times|x)\s*(\d+)",
-        lower_p,
-    )
-    if calc_match:
-        n1, n2 = calc_match.group(1), calc_match.group(2)
-        calc_expr = f"{n1}*{n2}="
-
-    actions_queue: List[Dict[str, Any]] = []
-
-    if app_target:
-        actions_queue.append({"action": "press_key", "key": "win"})
-        actions_queue.append({"action": "type", "text": app_target})
-        actions_queue.append({"action": "press_key", "key": "enter"})
-        actions_queue.append({"action": "wait", "seconds": 1.5})
-
-    if calc_expr:
-        actions_queue.append({"action": "type", "text": calc_expr})
-        actions_queue.append({"action": "wait", "seconds": 0.5})
-    elif type_text:
-        actions_queue.append({"action": "type", "text": type_text})
-        actions_queue.append({"action": "wait", "seconds": 0.5})
-
-    if not actions_queue:
-        actions_queue.append({"action": "type", "text": clean_p})
-
-    actions_queue.append({
-        "action": "terminate",
-        "reason": f"Executed sequence for: '{clean_p}'",
-    })
-
-    def runner(payload: Dict[str, Any]) -> str:
-        nonlocal step_idx
-        if step_idx < len(actions_queue):
-            act = actions_queue[step_idx]
-            step_idx += 1
-            return json.dumps(act)
-        return json.dumps({"action": "terminate", "reason": "All planned actions executed."})
-
-    return runner
 
 
 def repl() -> None:
@@ -219,6 +176,32 @@ def repl() -> None:
                 print(f"[*] Current model: '{curr_model}'. Usage: /model <model_name>")
             continue
 
+        if prompt_input.startswith("/ollama"):
+            parts = prompt_input.split(maxsplit=1)
+            if len(parts) > 1:
+                new_host = parts[1].strip()
+                os.environ["OLLAMA_HOST"] = new_host
+                print(f"[+] Ollama host set to: '{new_host}'")
+            else:
+                curr_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+                print(f"[*] Current Ollama host: '{curr_host}'. Usage: /ollama <url>")
+            continue
+
+        if prompt_input.startswith("/vision"):
+            parts = prompt_input.split(maxsplit=1)
+            if len(parts) > 1:
+                target_elem = parts[1].strip()
+                print(f"\n[*] [LOCAL VISION] Grounding '{target_elem}' with native in-process VLM...", flush=True)
+                res = ground_and_click_target(target_elem, duration=0.20, real_execution=True)
+                if res.get("success"):
+                    coords = res.get("coordinates")
+                    print(f"[+] [LOCAL VISION SUCCESS] Grounded and clicked '{target_elem}' at screen coordinate {coords}!", flush=True)
+                else:
+                    print(f"[!] [LOCAL VISION FAILED] {res.get('message', res.get('error'))}", flush=True)
+            else:
+                print("[!] Usage: /vision <target element to click> (e.g. /vision Calculator icon)")
+            continue
+
         if prompt_input.startswith("/status"):
             print_status()
             continue
@@ -233,7 +216,23 @@ def repl() -> None:
             continue
 
         # ----------------------------------------------------------------------
-        # Dispatch Dynamic Objective to Miku's Computer Use Agent Loop
+        # Direct Natural Language Ground & Click Dispatch via In-Process VLM
+        # ----------------------------------------------------------------------
+        click_match = re.match(r"^(?:click|tap|press\s+on)\s+(?:the\s+)?(.+)$", prompt_input, re.IGNORECASE)
+        if click_match and not any(kw in prompt_input.lower() for kw in ("and", "then", "open", "type", "search")):
+            target_elem = click_match.group(1).strip()
+            print(f"\n[*] [LOCAL VISION] Grounding '{target_elem}' with native in-process VLM...", flush=True)
+            res = ground_and_click_target(target_elem, duration=0.20, real_execution=True)
+            if res.get("success"):
+                coords = res.get("coordinates")
+                print(f"[+] [LOCAL VISION SUCCESS] Grounded and clicked '{target_elem}' at screen coordinate {coords}!", flush=True)
+            else:
+                print(f"[!] [LOCAL VISION FAILED] {res.get('message', res.get('error'))}", flush=True)
+            print("-" * 75, flush=True)
+            continue
+
+        # ----------------------------------------------------------------------
+        # Multi-Step Computer Use Agent Loop Dispatch (Cloud Astra or Local Ollama)
         # ----------------------------------------------------------------------
         print(f"\n[*] [TASK DISPATCHED] Objective: \"{prompt_input}\"", flush=True)
         t_start = time.perf_counter()
@@ -243,9 +242,12 @@ def repl() -> None:
             model = os.environ.get("ASTRA_MODEL", "openai/gpt-6-astra")
             client = AstraVisionClient(model=model)
         else:
+            ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+            ollama_model = os.environ.get("OLLAMA_VISION_MODEL", "llama3.2-vision")
             client = AstraVisionClient(
-                model="local/dynamic-heuristic",
-                api_runner=create_dynamic_intent_runner(prompt_input),
+                model=ollama_model,
+                ollama_host=ollama_host,
+                ollama_model=ollama_model,
             )
 
         try:
@@ -263,6 +265,8 @@ def repl() -> None:
                 print(f"    [!] Details: {res.error}", flush=True)
         except KeyboardInterrupt:
             print("\n[!] [TASK ABORTED] Execution stopped by user via CTRL+C. Control returned to console.", flush=True)
+        except ConnectionError as conn_exc:
+            print(f"\n[!] [CONNECTION ERROR] {conn_exc}", flush=True)
         except Exception as exc:
             print(f"\n[!] [TASK ERROR] {exc}", flush=True)
 
