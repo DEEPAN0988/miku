@@ -167,38 +167,134 @@ def find_installed_apps(query: str, limit: int = 5) -> List[Dict[str, str]]:
     return results
 
 
-def launch_app(app_name: str) -> Dict[str, Any]:
+def find_direct_game_binary(launcher_path: str) -> Optional[str]:
     """
-    Launches an application by name via os.startfile.
-    Returns status dictionary with execution details.
+    If a launcher executable is provided, checks if a direct game binary exists
+    in a sibling or sub-directory (e.g., 'Wuthering Waves Game\\Wuthering Waves.exe').
+    """
+    if not launcher_path or not os.path.exists(launcher_path):
+        return None
+    base_dir = os.path.dirname(launcher_path)
+    base_name = os.path.basename(base_dir).lower()
+    excluded = ("uninst", "clearthirdparty", "crashreport", "unitycrashhandler", "update", "patch")
+    candidates = []
+    try:
+        for entry in os.listdir(base_dir):
+            sub_path = os.path.join(base_dir, entry)
+            if os.path.isdir(sub_path) and "game" in entry.lower():
+                for f in os.listdir(sub_path):
+                    if f.lower().endswith(".exe") and not any(x in f.lower() for x in excluded):
+                        cand = os.path.join(sub_path, f)
+                        if os.path.isfile(cand):
+                            candidates.append(cand)
+        if candidates:
+            # Prioritize candidate that shares words with the base game folder name
+            candidates.sort(
+                key=lambda c: len(set(os.path.splitext(os.path.basename(c))[0].lower().split()) & set(base_name.split())),
+                reverse=True,
+            )
+            return candidates[0]
+    except Exception:
+        pass
+    return None
+
+
+def _verify_process_alive(target: str, min_duration: float = 1.0) -> bool:
+    """
+    Verifies if a process matching target image name is actively running in tasklist
+    and remains alive after a stabilization duration.
+    """
+    base_name = os.path.basename(target).lower()
+    time.sleep(min_duration)
+    try:
+        res = subprocess.run(["tasklist", "/fi", f"IMAGENAME eq {base_name}"], capture_output=True, text=True, timeout=2)
+        lines = [line for line in res.stdout.splitlines() if base_name in line.lower()]
+        return len(lines) > 0 and "info: no tasks" not in res.stdout.lower()
+    except Exception:
+        return False
+
+
+
+def launch_app(app_name: str, max_retries: int = 3, retry_delay: float = 0.5) -> Dict[str, Any]:
+    """
+    Launches an application by name via a resilient multi-tier fallback loop:
+      Tier 1: Direct shell execution via os.startfile (verified with tasklist).
+      Tier 2: Windows Application Compatibility Layer (RunAsInvoker shim).
+      Tier 3: Windows Task Scheduler Bridge (zero-prompt execution).
+      Tier 4: Auto-registration & elevated fallback.
     """
     res = resolve_app_path(app_name)
     if not res:
-        # Fallback attempt: try directly launching with .exe
         target = f"{app_name.strip()}.exe"
         resolved_name = app_name.strip()
     else:
         resolved_name, target = res
 
+    working_dir: Optional[str] = None
+    # Unwrap .lnk shortcut target if applicable
+    if target.lower().endswith(".lnk") and os.path.exists(target):
+        try:
+            import win32com.client
+            sh = win32com.client.Dispatch("WScript.Shell")
+            sc = sh.CreateShortcut(target)
+            if sc.TargetPath and os.path.exists(sc.TargetPath):
+                working_dir = sc.WorkingDirectory if (sc.WorkingDirectory and os.path.exists(sc.WorkingDirectory)) else os.path.dirname(sc.TargetPath)
+                target = sc.TargetPath
+        except Exception:
+            pass
+
+    if not working_dir and os.path.isabs(target):
+        working_dir = os.path.dirname(target)
+
+    # Check for direct game binary if target is a launcher
+    direct_game_binary = find_direct_game_binary(target)
+    candidates = [target]
+    if direct_game_binary and direct_game_binary not in candidates:
+        candidates.append(direct_game_binary)
+
+    # Tier 1: Direct execution via os.startfile with process verification
+    for cand in candidates:
+        try:
+            os.startfile(cand)
+            if _verify_process_alive(cand, timeout=1.2):
+                return {
+                    "status": "SUCCESS",
+                    "mode": "DIRECT_STARTFILE",
+                    "app_name": resolved_name,
+                    "target": cand,
+                    "output": f"Launched application '{resolved_name}' via target '{cand}'.",
+                }
+        except OSError as e:
+            if getattr(e, "winerror", None) == 740:
+                break
+        except Exception:
+            pass
+
+    # Tier 2: Application Compatibility Layer (RunAsInvoker shim)
+    for cand in candidates:
+        cand_wd = os.path.dirname(cand) if os.path.isabs(cand) else working_dir
+        for _ in range(max_retries):
+            try:
+                env = os.environ.copy()
+                env["__COMPAT_LAYER"] = "RunAsInvoker"
+                p = subprocess.Popen([cand], cwd=cand_wd, env=env)
+                if _verify_process_alive(cand, min_duration=1.2) and p.poll() is None:
+                    return {
+                        "status": "SUCCESS",
+                        "mode": "COMPAT_RUNASINVOKER",
+                        "app_name": resolved_name,
+                        "target": cand,
+                        "pid": p.pid,
+                        "output": f"Launched application '{resolved_name}' via RunAsInvoker compatibility shim (PID {p.pid}).",
+                    }
+            except Exception:
+                pass
+
+
+    # Tier 3: Task Scheduler Bridge via launch_elevated_app
     try:
-        os.startfile(target)
-        return {
-            "status": "SUCCESS",
-            "app_name": resolved_name,
-            "target": target,
-            "output": f"Launched application '{resolved_name}' via target '{target}'.",
-        }
-    except OSError as e:
-        if getattr(e, "winerror", None) == 740:
-            from tools.system_dispatcher import launch_elevated_app
-            return launch_elevated_app(app_name)
-        return {
-            "status": "ERROR",
-            "app_name": app_name,
-            "target": target,
-            "error": str(e),
-            "output": f"Failed to launch '{app_name}': {e}",
-        }
+        from tools.system_dispatcher import launch_elevated_app
+        return launch_elevated_app(app_name, working_dir=working_dir)
     except Exception as e:
         return {
             "status": "ERROR",
@@ -207,6 +303,8 @@ def launch_app(app_name: str) -> Dict[str, Any]:
             "error": str(e),
             "output": f"Failed to launch '{app_name}': {e}",
         }
+
+
 
 
 def restart_app(app_name: str) -> Dict[str, Any]:
