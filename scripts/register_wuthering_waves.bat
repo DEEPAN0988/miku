@@ -1,5 +1,14 @@
 @echo off
 title Miku Elevated Task Registration
+
+:: Check for Administrator privileges; auto-elevate if not admin
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo [INFO] Administrative privileges required. Requesting UAC elevation...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process cmd.exe -ArgumentList '/c \"\"%~f0\"\"' -Verb RunAs"
+    exit /b
+)
+
 echo ===================================================
 echo Registering Miku Elevated Task for Wuthering Waves
 echo ===================================================
@@ -7,7 +16,6 @@ schtasks /create /tn "Miku_Elevated_wuthering_waves" /tr "\"\"C:\Program Files\W
 echo.
 if %errorlevel% neq 0 (
     echo [ERROR] Task registration failed.
-    echo Please ensure you right-clicked this file and selected "Run as administrator".
 ) else (
     echo [SUCCESS] Task created successfully!
     echo Launching Wuthering Waves via task...
@@ -15,3 +23,4 @@ if %errorlevel% neq 0 (
 )
 echo.
 pause
+
