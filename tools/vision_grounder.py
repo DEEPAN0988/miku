@@ -116,6 +116,33 @@ def capture_window_bitmap(hwnd: int) -> Optional[Tuple[np.ndarray, Tuple[int, in
     return arr, (left, top, right, bottom)
 
 
+def capture_window_base64(
+    hwnd: int,
+    format: str = "png",
+) -> Optional[Tuple[str, Tuple[int, int, int, int]]]:
+    """
+    Captures window bitmap via Win32 GDI BitBlt and returns:
+      (base64_data_url, (left, top, right, bottom))
+    or None if capture fails.
+    """
+    import base64
+
+    captured = capture_window_bitmap(hwnd)
+    if captured is None:
+        return None
+
+    img_bgr, rect = captured
+    ext = f".{format.lstrip('.').lower()}"
+    success, buffer = cv2.imencode(ext, img_bgr)
+    if not success:
+        return None
+
+    b64_str = base64.b64encode(buffer).decode("utf-8")
+    mime = "image/png" if ext == ".png" else "image/jpeg"
+    data_url = f"data:{mime};base64,{b64_str}"
+    return data_url, rect
+
+
 def detect_visual_interactive_regions(
     image: np.ndarray,
     window_origin: Tuple[int, int] = (0, 0),

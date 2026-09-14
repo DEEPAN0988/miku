@@ -15,10 +15,14 @@ Constitutional Safety & State Machine Guarantees:
 
 from __future__ import annotations
 
+import json
+import os
+import re
 import time
+import urllib.request
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from tools.screen_inspector import (
     UIElement,
@@ -27,9 +31,13 @@ from tools.screen_inspector import (
     find_element,
     simulate_click,
     dispatch_real_click,
+    verify_element_clickable,
     REAL_CLICK_ENABLED,
 )
-from tools.vision_grounder import inspect_screen_with_vision_fallback
+from tools.vision_grounder import (
+    inspect_screen_with_vision_fallback,
+    capture_window_base64,
+)
 from tools.typing_automation import (
     simulate_typing,
     dispatch_real_typing,
@@ -62,6 +70,8 @@ class CompoundTask:
     audit_element_query: Optional[str] = None
     use_vision_fallback: bool = True
     real_execution: bool = False
+    use_astra_vision: bool = False
+    astra_client: Optional[Any] = None
 
 
 @dataclass
@@ -343,3 +353,343 @@ class CompoundActionEngine:
             grounded_element=grounded_el,
             action_log="\n".join(action_logs),
         )
+
+
+# ==============================================================================
+# Astra Multimodal Vision Client & Action Translation Layer
+# ==============================================================================
+
+class AstraVisionClient:
+    """
+    Multimodal API client targeting vision-grounded UI navigation models (e.g. openai/gpt-6-astra).
+    Formats Miku's GDI BitBlt screenshots into base64 data URLs and requests structured UI navigation actions.
+    """
+
+    def __init__(
+        self,
+        model: str = "openai/gpt-6-astra",
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        api_runner: Optional[Callable[[Dict[str, Any]], Any]] = None,
+    ):
+        self.model = model
+        self.api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
+        self.base_url = base_url or os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+        self.api_runner = api_runner
+
+    def build_vision_payload(
+        self,
+        query: str,
+        base64_image_url: str,
+        system_prompt: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Builds the OpenAI-compatible multimodal chat completions payload with base64 image data URL.
+        """
+        sys_msg = system_prompt or (
+            "You are Miku OS Vision Navigation Engine. Given the user's intent and desktop screenshot, "
+            "locate the target element and respond ONLY with a JSON object: "
+            '{"action": "click", "x": <int>, "y": <int>} or {"action": "type", "text": "<str>", "x": <int>, "y": <int>}'
+        )
+        return {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": sys_msg,
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": query},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": base64_image_url},
+                        },
+                    ],
+                },
+            ],
+            "temperature": 0.0,
+            "response_format": {"type": "json_object"},
+        }
+
+    def query_action(
+        self,
+        query: str,
+        base64_image_url: str,
+    ) -> str:
+        """
+        Dispatches multimodal vision request to model endpoint.
+        Uses api_runner if provided, otherwise calls standard HTTP endpoint.
+        """
+        payload = self.build_vision_payload(query, base64_image_url)
+        if self.api_runner is not None:
+            return self.api_runner(payload)
+
+        req = urllib.request.Request(
+            f"{self.base_url.rstrip('/')}/chat/completions",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data["choices"][0]["message"]["content"]
+
+
+def parse_astra_action(response: str | Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Parses structured JSON commands for UI navigation from Astra model output.
+    Expected schemas:
+      {"action": "click", "x": 527, "y": 349}
+      {"action": "type", "text": "foo", "x": 527, "y": 349}
+      {"action": "move", "x": 527, "y": 349}
+    """
+    if isinstance(response, dict):
+        raw_data = response
+    elif isinstance(response, str):
+        clean = response.strip()
+        # Strip markdown code blocks if present
+        if clean.startswith("```"):
+            clean = re.sub(r"^```(?:json)?\s*", "", clean, flags=re.IGNORECASE)
+            clean = re.sub(r"\s*```$", "", clean)
+        try:
+            raw_data = json.loads(clean)
+        except json.JSONDecodeError:
+            # Fallback regex extraction for {"action": ..., "x": ..., "y": ...}
+            match = re.search(r"\{[^{}]*\"action\"[^{}]*\}", clean)
+            if match:
+                try:
+                    raw_data = json.loads(match.group(0))
+                except Exception:
+                    return {"valid": False, "error": "INVALID_JSON", "raw": response}
+            else:
+                return {"valid": False, "error": "INVALID_JSON", "raw": response}
+    else:
+        return {"valid": False, "error": "UNSUPPORTED_TYPE", "raw": response}
+
+    if not isinstance(raw_data, dict):
+        return {"valid": False, "error": "NOT_A_DICT", "raw": raw_data}
+
+    action = str(raw_data.get("action", "")).lower().strip()
+    if action not in ("click", "type", "move"):
+        return {"valid": False, "error": f"UNSUPPORTED_ACTION_{action.upper()}", "raw": raw_data}
+
+    try:
+        x = int(raw_data.get("x", 0))
+        y = int(raw_data.get("y", 0))
+    except (ValueError, TypeError):
+        return {"valid": False, "error": "NON_INTEGER_COORDINATES", "raw": raw_data}
+
+    parsed = {
+        "valid": True,
+        "action": action,
+        "x": x,
+        "y": y,
+        "button": raw_data.get("button", "left"),
+        "text": raw_data.get("text", ""),
+        "raw": raw_data,
+    }
+    return parsed
+
+
+def dispatch_astra_ui_action(
+    target_hwnd: int,
+    action_dict: Dict[str, Any],
+    real_execution: bool = False,
+    human_confirm_runner: Optional[Callable] = None,
+) -> Dict[str, Any]:
+    """
+    Action Translation Layer:
+    Intercepts Astra's parsed JSON action, validates coordinate clickability via Miku's local
+    verify_element_clickable safety gate, and routes directly to simulate_click or dispatch_real_click.
+
+    Triple Circuit Breaker Invariant:
+      REAL_CLICK_ENABLED must remain respected; physical input is permanently blocked by default.
+    """
+    if not action_dict.get("valid"):
+        return {
+            "success": False,
+            "status": "REJECTED_INVALID_ACTION",
+            "action": action_dict.get("action"),
+            "coordinate": (action_dict.get("x", 0), action_dict.get("y", 0)),
+            "output": f"[ASTRA ACTION REJECTION] Invalid action payload: {action_dict.get('error')}",
+        }
+
+    x = action_dict["x"]
+    y = action_dict["y"]
+    coord = (x, y)
+    action_verb = action_dict["action"]
+    button = action_dict.get("button", "left")
+
+    # Step 1: Intercept through local safety gate verify_element_clickable
+    click_verif = verify_element_clickable(target_hwnd, coord)
+    if not click_verif.is_safe:
+        return {
+            "success": False,
+            "status": f"ABORT_{click_verif.reason}",
+            "action": action_verb,
+            "coordinate": coord,
+            "verification": click_verif,
+            "output": (
+                f"[LOCAL SAFETY GATE REJECTION] Astra proposed {action_verb} at {coord}, but "
+                f"verify_element_clickable rejected: {click_verif.reason} ({click_verif.details})."
+            ),
+        }
+
+    # Step 2: Route to simulate_click or dispatch_real_click
+    if action_verb in ("click", "move"):
+        if real_execution and REAL_CLICK_ENABLED:
+            click_res = dispatch_real_click(
+                target_hwnd,
+                coord,
+                button=button,
+                human_confirm_runner=human_confirm_runner,
+            )
+            return {
+                "success": click_res.success,
+                "status": click_res.status,
+                "mode": "REAL_CLICK",
+                "action": action_verb,
+                "coordinate": coord,
+                "output": click_res.action_log,
+                "details": click_res.to_dict(),
+            }
+        else:
+            sim_res = simulate_click(
+                target_hwnd,
+                coord,
+                button=button,
+            )
+            return {
+                "success": sim_res.success,
+                "status": sim_res.status,
+                "mode": "SIMULATED_CLICK",
+                "action": action_verb,
+                "coordinate": coord,
+                "output": sim_res.action_log,
+                "details": sim_res.to_dict(),
+            }
+    elif action_verb == "type":
+        text = action_dict.get("text", "")
+        # First simulate click to focus coordinate
+        sim_res = simulate_click(target_hwnd, coord, button="left")
+        if not sim_res.success:
+            return {
+                "success": False,
+                "status": sim_res.status,
+                "action": "type",
+                "coordinate": coord,
+                "output": f"[TYPE FOCUS FAILED] {sim_res.action_log}",
+            }
+        if real_execution and REAL_TYPE_ENABLED:
+            type_res = dispatch_real_typing(text)
+            return {
+                "success": type_res.success,
+                "status": type_res.status,
+                "mode": "REAL_TYPE",
+                "action": "type",
+                "text": text,
+                "coordinate": coord,
+                "output": type_res.action_log,
+            }
+        else:
+            type_res = simulate_typing(text)
+            return {
+                "success": type_res.success,
+                "status": type_res.status,
+                "mode": "SIMULATED_TYPE",
+                "action": "type",
+                "text": text,
+                "coordinate": coord,
+                "output": type_res.action_log,
+            }
+
+    return {
+        "success": False,
+        "status": "UNHANDLED_ACTION",
+        "action": action_verb,
+        "coordinate": coord,
+        "output": f"Unhandled action verb: {action_verb}",
+    }
+
+
+def execute_with_astra_vision(
+    target_hwnd: int,
+    query: str,
+    client: Optional[AstraVisionClient] = None,
+    real_execution: bool = False,
+    human_confirm_runner: Optional[Callable] = None,
+    screenshot_capturer: Optional[Callable[[int], Optional[Tuple[str, Tuple[int, int, int, int]]]]] = None,
+) -> Dict[str, Any]:
+    """
+    Executes a complete multimodal vision navigation step via Astra:
+    1. Captures Win32 GDI BitBlt screenshot of target_hwnd.
+    2. Base64 encodes image into a data URL.
+    3. Queries Astra API (targeting openai/gpt-6-astra).
+    4. Parses structured JSON response via parse_astra_action.
+    5. Dispatches action through verify_element_clickable safety gate to simulate_click / dispatch_real_click.
+    """
+    if client is None:
+        client = AstraVisionClient()
+
+    # Step 1 & 2: GDI BitBlt Capture & Base64 encoding
+    capturer = screenshot_capturer or capture_window_base64
+    capture_res = capturer(target_hwnd)
+    if capture_res is None:
+        return {
+            "success": False,
+            "status": "CAPTURE_FAILED",
+            "output": f"[ASTRA VISION ERROR] Failed to capture GDI BitBlt bitmap for HWND {target_hwnd}.",
+        }
+
+    b64_url, window_rect = capture_res
+
+    # Step 3: Query Astra API
+    try:
+        raw_response = client.query_action(query, b64_url)
+    except Exception as e:
+        return {
+            "success": False,
+            "status": "API_ERROR",
+            "error": str(e),
+            "output": f"[ASTRA API ERROR] Model query failed: {e}",
+        }
+
+    # Step 4: Parse structured JSON action
+    action_dict = parse_astra_action(raw_response)
+    if not action_dict.get("valid"):
+        return {
+            "success": False,
+            "status": "ACTION_PARSE_FAILED",
+            "raw_response": raw_response,
+            "details": action_dict,
+            "output": f"[ASTRA PARSE ERROR] Could not parse valid action from response: {action_dict.get('error')}",
+        }
+
+    # Step 5: Translate and dispatch with local safety interception
+    dispatch_res = dispatch_astra_ui_action(
+        target_hwnd=target_hwnd,
+        action_dict=action_dict,
+        real_execution=real_execution,
+        human_confirm_runner=human_confirm_runner,
+    )
+    dispatch_res["raw_model_response"] = raw_response
+    dispatch_res["parsed_action"] = action_dict
+    return dispatch_res
+
+
+__all__ = [
+    "CompoundActionEngine",
+    "CompoundTask",
+    "OrchestratorResult",
+    "PipelineState",
+    "StepTelemetry",
+    "AstraVisionClient",
+    "parse_astra_action",
+    "dispatch_astra_ui_action",
+    "execute_with_astra_vision",
+]
