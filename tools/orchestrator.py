@@ -467,6 +467,7 @@ class AstraVisionClient:
 
 SUPPORTED_ASTRA_ACTIONS = (
     "click",
+    "right_click",
     "double_click",
     "type",
     "press_key",
@@ -481,6 +482,7 @@ def parse_astra_action(response: str | Dict[str, Any]) -> Dict[str, Any]:
     Parses structured JSON commands for UI navigation from Astra model output.
     Expected schemas:
       {"action": "click", "x": 527, "y": 349}
+      {"action": "right_click", "x": 527, "y": 349}
       {"action": "double_click", "x": 527, "y": 349}
       {"action": "type", "text": "foo"}
       {"action": "press_key", "key": "enter"}
@@ -517,6 +519,11 @@ def parse_astra_action(response: str | Dict[str, Any]) -> Dict[str, Any]:
     action = str(raw_data.get("action", "")).lower().strip()
     if action not in SUPPORTED_ASTRA_ACTIONS:
         return {"valid": False, "error": f"UNSUPPORTED_ACTION_{action.upper()}", "raw": raw_data}
+
+    # Normalize right_click to click with button=right
+    if action == "right_click":
+        action = "click"
+        raw_data["button"] = "right"
 
     parsed: Dict[str, Any] = {
         "valid": True,

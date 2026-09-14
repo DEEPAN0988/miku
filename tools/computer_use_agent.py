@@ -31,6 +31,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import win32gui
 
 from tools.screen_inspector import (
+    _attach_thread_to_default_desktop,
     verify_element_clickable,
     simulate_click,
     dispatch_real_click,
@@ -50,6 +51,8 @@ from tools.typing_automation import (
 )
 from tools.vision_grounder import capture_window_base64
 from tools.orchestrator import AstraVisionClient, parse_astra_action
+
+_attach_thread_to_default_desktop()
 
 user32 = ctypes.windll.user32
 
@@ -294,6 +297,47 @@ def dispatch_computer_use_action(
     # 3. Press Key
     if action_verb == "press_key":
         key = action_dict.get("key", "")
+
+        # Support key chords/combinations (e.g., "ctrl+c", "ctrl+v", "ctrl+s")
+        if "+" in key:
+            parts = [p.strip().lower() for p in key.split("+") if p.strip()]
+            vk_codes = [resolve_virtual_key(p) for p in parts]
+            if any(v is None for v in vk_codes):
+                return ComputerUseStepResult(
+                    step=0,
+                    action=action_dict,
+                    success=False,
+                    status="ABORT_UNKNOWN_KEY",
+                    output=f"[KEY REJECTION] Unknown or unsupported key in chord: '{key}'",
+                    details={"key": key},
+                )
+
+            if real_execution:
+                for vk in vk_codes:
+                    user32.keybd_event(vk, 0, 0, 0)
+                    time.sleep(0.02)
+                time.sleep(0.05)
+                for vk in reversed(vk_codes):
+                    user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, 0)
+                    time.sleep(0.02)
+                return ComputerUseStepResult(
+                    step=0,
+                    action=action_dict,
+                    success=True,
+                    status="REAL_KEY_CHORD_DISPATCHED",
+                    output=f"[REAL KEY] Pressed key chord '{key}'",
+                    details={"key": key, "vk_codes": vk_codes, "real_input": True},
+                )
+            else:
+                return ComputerUseStepResult(
+                    step=0,
+                    action=action_dict,
+                    success=True,
+                    status="SIMULATED_KEY_SUCCESS",
+                    output=f"[SIMULATED KEY] Would press key chord '{key}'",
+                    details={"key": key, "vk_codes": vk_codes, "real_input": False},
+                )
+
         vk = resolve_virtual_key(key)
         if vk is None:
             return ComputerUseStepResult(
@@ -539,6 +583,7 @@ def run_computer_use_task(
         # ----------------------------------------------------------------------
         # Step a: Capture the full desktop screen
         # ----------------------------------------------------------------------
+        _attach_thread_to_default_desktop()
         desktop_hwnd = win32gui.GetDesktopWindow()
         capture_res = capturer(desktop_hwnd)
         if capture_res is None:
