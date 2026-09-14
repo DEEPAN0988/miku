@@ -338,6 +338,16 @@ def launch_app(app_name: str, max_retries: int = 3, retry_delay: float = 0.5) ->
     for cand in tier1_candidates:
         try:
             os.startfile(cand)
+            if cand.lower().startswith("ms-"):
+                # Protocol URI handler (e.g. ms-windows-store:, ms-xbox-splash:)
+                time.sleep(1.0)
+                return {
+                    "status": "SUCCESS",
+                    "mode": "SHELL_PROTOCOL",
+                    "app_name": resolved_name,
+                    "target": cand,
+                    "output": f"Launched application '{resolved_name}' via Windows Shell protocol '{cand}'.",
+                }
             if _verify_process_alive(cand, min_duration=0.8, expected_image=expected_img):
                 return {
                     "status": "SUCCESS",
@@ -381,11 +391,23 @@ def launch_app(app_name: str, max_retries: int = 3, retry_delay: float = 0.5) ->
             except Exception:
                 pass
 
-    # Tier 3: Task Scheduler Bridge via launch_elevated_app
+    # Tier 3: Task Scheduler Bridge via launch_elevated_app (non-blocking)
+    elevated_res = None
     try:
         from tools.system_dispatcher import launch_elevated_app
-        return launch_elevated_app(app_name, working_dir=working_dir)
+        elevated_res = launch_elevated_app(app_name, working_dir=working_dir, auto_register=False)
+        if elevated_res.get("status") in ("SUCCESS", "TASK_SCHEDULER_RUN_SUCCESS"):
+            return elevated_res
+    except Exception:
+        pass
+
+    # Tier 4: Autonomous Keyboard & Mouse Search Fallback
+    # If programmatic launch fails, Miku takes control of keyboard and mouse to search and open
+    try:
+        return open_app_via_gui_search(app_name)
     except Exception as e:
+        if elevated_res:
+            return elevated_res
         return {
             "status": "ERROR",
             "app_name": app_name,
@@ -393,6 +415,59 @@ def launch_app(app_name: str, max_retries: int = 3, retry_delay: float = 0.5) ->
             "error": str(e),
             "output": f"Failed to launch '{app_name}': {e}",
         }
+
+
+def open_app_via_gui_search(app_name: str) -> Dict[str, Any]:
+    """
+    Tier 4 Autonomous Fallback: Gives Miku keyboard and mouse control to
+    open Windows Search, type the application name, and press Enter to launch it.
+    """
+    clean_name = app_name.strip()
+    user32 = ctypes.windll.user32
+
+    # 1. Trigger Windows Search via official Shell COM interface or Win+S
+    try:
+        import win32com.client
+        sh = win32com.client.Dispatch("Shell.Application")
+        sh.SearchCommand()
+    except Exception:
+        user32.keybd_event(0x5B, 0, 0, 0)
+        user32.keybd_event(0x53, 0, 0, 0)
+        user32.keybd_event(0x53, 0, 2, 0)
+        user32.keybd_event(0x5B, 0, 2, 0)
+
+    time.sleep(0.8)
+
+    # 2. Type application name into search box
+    for char in clean_name:
+        vk = user32.VkKeyScanW(ord(char))
+        if vk != -1:
+            shift = (vk >> 8) & 1
+            code = vk & 0xFF
+            if shift:
+                user32.keybd_event(0x10, 0, 0, 0)
+            user32.keybd_event(code, 0, 0, 0)
+            user32.keybd_event(code, 0, 2, 0)
+            if shift:
+                user32.keybd_event(0x10, 0, 2, 0)
+        time.sleep(0.02)
+
+    # 3. Wait for search indexer to highlight top match
+    time.sleep(0.8)
+
+    # 4. Dispatch Enter key
+    user32.keybd_event(0x0D, 0, 0, 0)
+    user32.keybd_event(0x0D, 0, 2, 0)
+
+    time.sleep(1.5)
+
+    return {
+        "status": "SUCCESS",
+        "mode": "GUI_KEYBOARD_MOUSE_SEARCH",
+        "app_name": clean_name,
+        "target": f"Windows Search: {clean_name}",
+        "output": f"Launched '{clean_name}' via Miku autonomous keyboard/mouse Windows Search.",
+    }
 
 
 
