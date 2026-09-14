@@ -23,9 +23,11 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
-from tools.app_launcher import (
+import shutil
 
+from tools.app_launcher import (
     BUILTIN_APPS,
+    close_app,
     launch_app,
     resolve_app_path,
     scan_registry_app_paths,
@@ -40,6 +42,7 @@ PROTECTED_PROCESSES = {
     "explorer",
     "python.exe",
     "python",
+    "pythonw.exe",
     "cmd.exe",
     "powershell.exe",
     "pwsh.exe",
@@ -66,35 +69,54 @@ EXCLUDED_APP_KEYWORDS = [
     "setup",
     "diagnostics",
     "repair",
+    "vcredist",
+    "dxsetup",
+    "update",
 ]
 
 
 def get_all_testable_apps() -> List[str]:
-    """Collects and deduplicates all valid application names on the host."""
+    """
+    Collects, deduplicates, and validates all installed Windows applications.
+    Ensures no application is opened twice by grouping aliases by canonical executable path.
+    """
     sm = scan_start_menu_shortcuts()
     rp = scan_registry_app_paths()
 
-    unique: Set[str] = set()
+    candidates = set(BUILTIN_APPS.keys()) | set(sm.keys()) | set(rp.keys())
 
-    for name in BUILTIN_APPS.keys():
-        unique.add(name)
+    target_map: Dict[str, List[str]] = {}
 
-    for name in sm.keys():
+    for name in candidates:
         clean = name.strip().lower()
-        if not any(k in clean for k in EXCLUDED_APP_KEYWORDS):
-            unique.add(name)
+        if any(k in clean for k in EXCLUDED_APP_KEYWORDS):
+            continue
+        res = resolve_app_path(clean)
+        if not res:
+            continue
+        resolved_name, target_path = res
+        norm_target = os.path.normpath(target_path).lower()
 
-    for name in rp.keys():
-        clean = name.strip().lower()
-        if not any(k in clean for k in EXCLUDED_APP_KEYWORDS):
-            unique.add(name)
+        # Check against protected IDE / critical system processes
+        if any(p in norm_target for p in PROTECTED_PROCESSES):
+            continue
+        if any(k in norm_target for k in EXCLUDED_APP_KEYWORDS):
+            continue
 
-    # Exclude protected IDE and critical processes from direct launch spam
-    filtered = [
-        app for app in sorted(unique)
-        if app.lower() not in ("antigravity", "antigravity ide")
-    ]
-    return filtered
+        # Filter out dead shortcuts / missing target binaries
+        if not (os.path.exists(target_path) or shutil.which(target_path)):
+            continue
+
+        target_map.setdefault(norm_target, []).append(clean)
+
+    # Pick a single canonical, human-friendly name for each target
+    canonical_apps: List[str] = []
+    for norm_target, aliases in sorted(target_map.items()):
+        # Prioritize names without .exe extension and shortest friendly name
+        clean_names = sorted(aliases, key=lambda x: (x.endswith(".exe"), len(x)))
+        canonical_apps.append(clean_names[0])
+
+    return canonical_apps
 
 
 def get_running_process_map() -> Dict[int, str]:
@@ -175,6 +197,7 @@ def run_stress_test(
     interval_seconds: float = 2.0,
     report_path: str = "eval/app_launch_stress_report.md",
     max_apps: int = 0,
+    max_rounds: int = 0,
 ):
     apps = get_all_testable_apps()
     if max_apps > 0:
@@ -201,6 +224,8 @@ def run_stress_test(
     round_idx = 0
     try:
         while (time.time() - start_time) < duration_seconds:
+            if max_rounds > 0 and round_idx >= max_rounds:
+                break
             round_idx += 1
             stats["rounds"] = round_idx
             print(f"\n[*] --- STARTING ROUND {round_idx} (Elapsed: {int(time.time() - start_time)}s) ---", flush=True)
@@ -218,7 +243,7 @@ def run_stress_test(
                 launch_res = launch_app(app_name)
                 latency = round((time.time() - t0) * 1000, 1)
 
-                is_success = launch_res.get("status") == "SUCCESS"
+                is_success = launch_res.get("status") in ("SUCCESS", "FALLBACK_DIRECT_ELEVATION")
                 spawned_pid = launch_res.get("pid")
 
                 # Snapshot processes after launch
@@ -248,16 +273,31 @@ def run_stress_test(
                     flush=True,
                 )
 
+                if not is_success:
+                    print(
+                        f"    [FAILURE DIAGNOSTIC] Target: {launch_res.get('target')} | "
+                        f"Detail: {launch_res.get('error') or launch_res.get('output')}",
+                        flush=True,
+                    )
+
+                # Cooldown / observation duration before closing
+                time.sleep(interval_seconds)
+
+                # Gracefully and safely close application
+                close_res = close_app(app_name, pid=log_pid)
+                close_out = close_res.get("output", "")
+                print(f"    [CLOSE] {close_out}", flush=True)
+
                 history.append({
                     "time": now_str,
                     "app": app_name,
                     "mode": mode_str,
                     "status": launch_res.get("status"),
                     "pid": log_pid,
-                    "output": launch_res.get("output", "") or launch_res.get("error", ""),
+                    "output": (launch_res.get("output", "") or launch_res.get("error", "")) + f" | Close: {close_res.get('status')}",
                 })
 
-                # Safe cleanup of newly spawned non-protected processes
+                # Extra fallback cleanup of any persisting non-protected spawned processes
                 for npid in diff_pids:
                     nimg = post_map.get(npid, "")
                     terminate_spawned_process(npid, nimg)
@@ -266,8 +306,6 @@ def run_stress_test(
                 # Periodically update report file
                 if stats["total"] % 5 == 0:
                     write_markdown_report(report_path, stats, history)
-
-                time.sleep(interval_seconds)
 
     except KeyboardInterrupt:
         print("\n[*] Test interrupted by user.", flush=True)
@@ -289,6 +327,7 @@ if __name__ == "__main__":
     parser.add_argument("--duration-hours", type=float, default=1.0, help="Total hours to run the test loop (default: 1.0)")
     parser.add_argument("--interval", type=float, default=1.5, help="Cooldown between launches in seconds (default: 1.5)")
     parser.add_argument("--max-apps", type=int, default=0, help="Limit number of apps to test (0 = all)")
+    parser.add_argument("--max-rounds", type=int, default=0, help="Limit number of rounds (0 = infinite loop until duration)")
     parser.add_argument("--report", type=str, default="eval/app_launch_stress_report.md", help="Output report markdown path")
 
     args = parser.parse_args()
@@ -297,4 +336,5 @@ if __name__ == "__main__":
         interval_seconds=args.interval,
         report_path=args.report,
         max_apps=args.max_apps,
+        max_rounds=args.max_rounds,
     )

@@ -225,12 +225,14 @@ def _verify_process_alive(
         "calculator": "calculatorapp.exe",
         "mspaint.exe": "mspaint.exe",
         "control.exe": "explorer.exe",
+        "wt.exe": "windowsterminal.exe",
+        "terminal": "windowsterminal.exe",
     }
     for alias_k, alias_v in ALIAS_MAP.items():
         if alias_k in images_to_check:
             images_to_check.add(alias_v)
 
-    if base_name.endswith(".msc"):
+    if any(img.endswith(".msc") for img in images_to_check):
         images_to_check.add("mmc.exe")
 
     try:
@@ -448,3 +450,172 @@ def focus_app(app_name: str) -> Dict[str, Any]:
         "hwnd": hwnd,
         "output": f"Brought window '{title}' to foreground.",
     }
+
+
+PROTECTED_PROCESSES = {
+    "antigravity",
+    "antigravity ide",
+    "antigravity ide.exe",
+    "python",
+    "python.exe",
+    "pythonw.exe",
+    "explorer.exe",
+    "explorer",
+    "dwm.exe",
+    "csrss.exe",
+    "lsass.exe",
+    "services.exe",
+    "svchost.exe",
+    "winlogon.exe",
+    "smss.exe",
+    "system",
+    "conhost.exe",
+}
+
+
+def close_app(
+    app_name: str,
+    pid: Optional[int] = None,
+    timeout: float = 2.0,
+    force: bool = False,
+) -> Dict[str, Any]:
+    """
+    Safely and gracefully closes an application:
+    1. Checks against PROTECTED_PROCESSES to guard against terminating critical IDE/OS services.
+    2. Posts WM_CLOSE (0x0010) to top-level windows for graceful cleanup.
+    3. Waits up to timeout for the process to exit.
+    4. Falls back to taskkill if process persists after timeout.
+    """
+    clean_name = app_name.strip().lower()
+    if not clean_name and not pid:
+        return {
+            "status": "ERROR",
+            "app_name": app_name,
+            "executed": False,
+            "output": "No application name or PID provided.",
+        }
+
+    # Safety check against protected processes
+    if any(p == clean_name or clean_name == f"{p}.exe" for p in PROTECTED_PROCESSES):
+        return {
+            "status": "PROTECTED",
+            "app_name": app_name,
+            "executed": False,
+            "output": f"Application '{app_name}' is a protected system or IDE process and cannot be closed.",
+        }
+
+    res = resolve_app_path(app_name)
+    target_img = ""
+    if res:
+        _, target_path = res
+        base = os.path.basename(target_path).lower()
+        if base.endswith(".exe"):
+            target_img = base
+        elif base.endswith(".lnk"):
+            # Check unwrap or alias
+            target_img = os.path.splitext(base)[0].lower() + ".exe"
+        elif base.endswith(".msc"):
+            target_img = "mmc.exe"
+    else:
+        target_img = f"{clean_name}.exe"
+
+    ALIAS_CLOSE_MAP = {
+        "calc.exe": "calculatorapp.exe",
+        "calculator.exe": "calculatorapp.exe",
+        "calc": "calculatorapp.exe",
+        "calculator": "calculatorapp.exe",
+        "paint": "mspaint.exe",
+        "terminal": "windowsterminal.exe",
+        "wt.exe": "windowsterminal.exe",
+        "control panel": "explorer.exe",
+    }
+    if clean_name in ALIAS_CLOSE_MAP:
+        target_img = ALIAS_CLOSE_MAP[clean_name]
+    elif target_img in ALIAS_CLOSE_MAP:
+        target_img = ALIAS_CLOSE_MAP[target_img]
+
+    if target_img in PROTECTED_PROCESSES:
+        return {
+            "status": "PROTECTED",
+            "app_name": app_name,
+            "executed": False,
+            "output": f"Resolved executable '{target_img}' is protected and cannot be closed.",
+        }
+
+    # 1. Collect target PIDs cleanly using psutil
+    target_pids = set()
+    if pid is not None:
+        target_pids.add(pid)
+    elif target_img:
+        try:
+            import psutil
+            for p in psutil.process_iter(["pid", "name"]):
+                try:
+                    p_name = p.info["name"].lower()
+                    if p_name == target_img or p_name == f"{target_img}.exe":
+                        p_pid = p.info["pid"]
+                        if p_pid > 4 and p_name not in PROTECTED_PROCESSES:
+                            target_pids.add(p_pid)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    # 2. Enumerate and post WM_CLOSE to windows belonging to target PIDs
+    import win32con
+    import win32gui
+    import win32process
+
+    closed_windows = []
+
+    def _close_cb(hwnd: int, _):
+        if win32gui.IsWindow(hwnd) and win32gui.IsWindowVisible(hwnd):
+            try:
+                _, w_pid = win32process.GetWindowThreadProcessId(hwnd)
+                if w_pid in target_pids:
+                    w_title = win32gui.GetWindowText(hwnd)
+                    win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+                    closed_windows.append((hwnd, w_title, w_pid))
+            except Exception:
+                pass
+        return True
+
+    if target_pids:
+        try:
+            win32gui.EnumWindows(_close_cb, None)
+        except Exception:
+            pass
+
+    # 3. Wait for process exit
+    time.sleep(min(timeout, 1.0))
+
+    # 4. If any target PIDs still persist, safely force terminate them
+    killed_pids = []
+    for t_pid in list(target_pids):
+        try:
+            import psutil
+            if psutil.pid_exists(t_pid):
+                proc = psutil.Process(t_pid)
+                if proc.name().lower() not in PROTECTED_PROCESSES:
+                    proc.terminate()
+                    killed_pids.append(t_pid)
+        except Exception:
+            pass
+
+    executed = bool(target_pids or closed_windows)
+    return {
+        "status": "SUCCESS" if executed else "NOT_FOUND",
+        "app_name": app_name,
+        "target_image": target_img,
+        "target_pids": list(target_pids),
+        "closed_windows_count": len(closed_windows),
+        "terminated_pids": killed_pids,
+        "executed": executed,
+        "output": (
+            f"Closed '{app_name}' ({target_img}): {len(closed_windows)} window(s) signaled, "
+            f"{len(killed_pids)} process(es) terminated."
+            if executed
+            else f"No active process or window found for '{app_name}' ({target_img})."
+        ),
+    }
+

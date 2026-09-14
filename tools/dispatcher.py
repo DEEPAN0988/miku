@@ -700,6 +700,16 @@ def dispatch_tool(tool_call: ToolCall, hitl_confirmed: bool = False, mock_window
             output=f"[REAL APP RESTART] {res['output']}",
             status=res["status"]
         )
+    elif tool_call.action == "Close App":
+        from tools.app_launcher import close_app
+        res = close_app(tool_call.argument)
+        return ToolResult(
+            tool_call=tool_call,
+            executed=res.get("executed", False),
+            dry_run=False,
+            output=f"[REAL APP CLOSE] {res['output']}",
+            status=res["status"]
+        )
     elif tool_call.action == "Send Message":
         from tools.messaging import send_whatsapp_message
         arg = tool_call.argument
