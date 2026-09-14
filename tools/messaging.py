@@ -423,7 +423,6 @@ def send_whatsapp_message(
     text: str,
     dry_run: bool = True,
     mock_window_state: Optional[Dict[str, Any]] = None,
-    interactive_confirmed: Optional[bool] = None
 ) -> Dict[str, Any]:
     """
     Sends a message via WhatsApp Desktop with multi-layered safety gates:
@@ -491,8 +490,8 @@ def send_whatsapp_message(
             "output": f"[SAFETY ABORT] Keystrokes blocked. {ui_verif['reason']}"
         }
 
-    # 5. Live Interactive Human Confirmation Gate
-    confirmed = interactive_confirmed if interactive_confirmed is not None else request_live_human_confirmation(recipient, text)
+    # 5. Live Interactive Human Confirmation Gate (Unconditional)
+    confirmed = request_live_human_confirmation(recipient, text)
     if not confirmed:
         return {
             "status": "DRY_RUN_PENDING_HITL",
@@ -574,7 +573,6 @@ class MessagingClientInterface(ABC):
         text: str,
         dry_run: bool = True,
         mock_window_state: Optional[Dict[str, Any]] = None,
-        interactive_confirmed: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Dispatches message with mandatory safety gating, UI verification, and circuit breaker."""
         pass
@@ -602,14 +600,12 @@ class WhatsAppDesktopClient(MessagingClientInterface):
         text: str,
         dry_run: bool = True,
         mock_window_state: Optional[Dict[str, Any]] = None,
-        interactive_confirmed: Optional[bool] = None,
     ) -> Dict[str, Any]:
         return send_whatsapp_message(
             recipient,
             text,
             dry_run=dry_run,
             mock_window_state=mock_window_state,
-            interactive_confirmed=interactive_confirmed,
         )
 
 
@@ -726,7 +722,6 @@ class TelegramClient(MessagingClientInterface):
         text: str,
         dry_run: bool = True,
         mock_window_state: Optional[Dict[str, Any]] = None,
-        interactive_confirmed: Optional[bool] = None,
     ) -> Dict[str, Any]:
         if not dry_run and not REAL_SEND_ENABLED:
             return {
@@ -764,7 +759,8 @@ class TelegramClient(MessagingClientInterface):
                 "output": f"[SIMULATION: MOCK SEND] Verified UI target: '{recipient}'. Would send via Telegram Desktop: \"{text}\"",
             }
 
-        confirmed = interactive_confirmed if interactive_confirmed is not None else request_live_human_confirmation(recipient, text)
+        # Live Interactive Human Confirmation Gate (Unconditional)
+        confirmed = request_live_human_confirmation(recipient, text)
         if not confirmed:
             return {
                 "status": "DRY_RUN_PENDING_HITL",
@@ -901,7 +897,6 @@ class DiscordClient(MessagingClientInterface):
         text: str,
         dry_run: bool = True,
         mock_window_state: Optional[Dict[str, Any]] = None,
-        interactive_confirmed: Optional[bool] = None,
     ) -> Dict[str, Any]:
         if not dry_run and not REAL_SEND_ENABLED:
             return {
@@ -939,7 +934,8 @@ class DiscordClient(MessagingClientInterface):
                 "output": f"[SIMULATION: MOCK SEND] Verified UI target: '{recipient}'. Would send via Discord: \"{text}\"",
             }
 
-        confirmed = interactive_confirmed if interactive_confirmed is not None else request_live_human_confirmation(recipient, text)
+        # Live Interactive Human Confirmation Gate (Unconditional)
+        confirmed = request_live_human_confirmation(recipient, text)
         if not confirmed:
             return {
                 "status": "DRY_RUN_PENDING_HITL",
@@ -1032,7 +1028,6 @@ class MultiTurnMessagingSession:
         user_input: str,
         dry_run: bool = True,
         mock_window_state: Optional[Dict[str, Any]] = None,
-        interactive_confirmed: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
         Processes one turn of user input in the conversation loop.
@@ -1138,7 +1133,6 @@ class MultiTurnMessagingSession:
                     self.message_text or "",
                     dry_run=dry_run,
                     mock_window_state=mock_window_state,
-                    interactive_confirmed=True if interactive_confirmed is None else interactive_confirmed,
                 )
                 self.execution_result = res
                 self.state = MessagingSessionState.EXECUTED if (res.get("executed") or res.get("status") in ("SIMULATED_SUCCESS", "SUCCESS")) else MessagingSessionState.ABORTED

@@ -379,7 +379,6 @@ def dispatch_real_typing(
     target_hwnd: int,
     element: UIElement,
     text: str,
-    interactive_confirmed: Optional[bool] = None,
     char_delay_ms: float = 10.0,
 ) -> TypingDispatchResult:
     """
@@ -437,13 +436,9 @@ def dispatch_real_typing(
             real_input_dispatched=False,
         )
 
-    # 4. Live Human Confirmation Gate
+    # 4. Live Human Confirmation Gate (Unconditional)
     target_title = verif.details.get("window_text") or f"HWND {target_hwnd}"
-    confirmed = (
-        interactive_confirmed
-        if interactive_confirmed is not None
-        else request_live_human_type_confirmation(target_title, el_name, safe_text)
-    )
+    confirmed = request_live_human_type_confirmation(target_title, el_name, safe_text)
     if not confirmed:
         return TypingDispatchResult(
             success=False,

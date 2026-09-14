@@ -24,6 +24,14 @@ import webbrowser
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 
+# ==============================================================================
+# PERMANENT SAFETY CIRCUIT BREAKER (DEFENSE IN DEPTH)
+# ==============================================================================
+# REAL RESOURCE FETCHING / PACKAGE INSTALL / BROWSER LAUNCH IS HARD-CODED TO FALSE.
+# Automated installation or external downloading is strictly prohibited by default.
+REAL_RESOURCE_FETCH_ENABLED: bool = False
+
+
 class ResourceType(str, Enum):
     APPLICATION = "APPLICATION"
     DATASET = "DATASET"
@@ -216,6 +224,17 @@ def dispatch_resource_fetch(
     clf = classify_resource_request(query)
     category = clf["category"]
     entity = clf["target_entity"]
+
+    if not dry_run and not REAL_RESOURCE_FETCH_ENABLED:
+        return {
+            "status": "CIRCUIT_BREAKER_BLOCKED",
+            "executed": False,
+            "dry_run": True,
+            "category": category.value if hasattr(category, "value") else str(category),
+            "entity": entity,
+            "error": "REAL_RESOURCE_FETCH_DISABLED: Real resource fetching/installation is permanently disabled (REAL_RESOURCE_FETCH_ENABLED=False).",
+            "output": f"[CIRCUIT BREAKER BLOCKED] Real resource downloading or installation is permanently disabled (REAL_RESOURCE_FETCH_ENABLED=False). Target: '{entity}'.",
+        }
 
     if category == ResourceType.APPLICATION:
         if dry_run:

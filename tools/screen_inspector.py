@@ -1005,7 +1005,6 @@ def dispatch_real_click(
     target_hwnd: int,
     element: UIElement | Tuple[int, int] | List[int],
     button: str = "left",
-    interactive_confirmed: Optional[bool] = None,
 ) -> ClickDispatchResult:
     """
     Dispatches a real physical mouse click to a target UIElement or coordinate on Windows desktop.
@@ -1068,9 +1067,9 @@ def dispatch_real_click(
             real_input_dispatched=False,
         )
 
-    # 4. Live Interactive Human Confirmation Gate
+    # 4. Live Interactive Human Confirmation Gate (Unconditional)
     target_title = verification.details.get("window_text") or f"HWND {target_hwnd}"
-    confirmed = interactive_confirmed if interactive_confirmed is not None else request_live_human_click_confirmation(target_title, el_name, coord, button)
+    confirmed = request_live_human_click_confirmation(target_title, el_name, coord, button)
     if not confirmed:
         return ClickDispatchResult(
             success=False,

@@ -22,10 +22,44 @@ from typing import Any, Dict, List, Optional, Union
 import win32com.shell.shell as shell
 import win32com.shell.shellcon as shellcon
 
+# ==============================================================================
+# PERMANENT SAFETY CIRCUIT BREAKER (DEFENSE IN DEPTH)
+# ==============================================================================
+# REAL FILE DELETION EXECUTION IS HARD-CODED TO FALSE.
+# Physical file deletion (even to Recycle Bin) is strictly prohibited by default.
+# This flag blocks any SHFileOperation deletion at the lowest level.
+REAL_FILE_DELETE_ENABLED: bool = False
+
+
+def request_live_human_delete_confirmation(paths_summary: str) -> bool:
+    """
+    Strict interactive human confirmation gate for real file deletion.
+    Must be run in an interactive console (sys.stdin.isatty()).
+    Cannot be bypassed by programmatic flags or scripted arguments.
+    Fails closed (returns False) in non-interactive environments, automated test scripts, or CI.
+    """
+    if not sys.stdin or not sys.stdin.isatty():
+        return False
+
+    try:
+        prompt = (
+            f"\n" + "=" * 80 + "\n"
+            f"[LIVE HUMAN DELETE CONFIRMATION REQUIRED]\n"
+            f"Target Paths    : {paths_summary}\n"
+            f"Destination     : Windows Recycle Bin (FOF_ALLOWUNDO)\n"
+            f"Circuit Breaker : REAL_FILE_DELETE_ENABLED={REAL_FILE_DELETE_ENABLED}\n"
+            f"Type 'CONFIRM DELETE' to proceed with deletion, or anything else to cancel:\n"
+            + "=" * 80 + "\n"
+            f"Confirmation: "
+        )
+        resp = input(prompt).strip()
+        return resp == "CONFIRM DELETE"
+    except Exception:
+        return False
+
 
 def safe_delete(
     target_paths: Union[str, List[str]],
-    confirmed: bool = False,
     dry_run: bool = True,
     silent: bool = True,
 ) -> Dict[str, Any]:
@@ -35,7 +69,6 @@ def safe_delete(
 
     Parameters:
       target_paths: A single file/folder path or a list of paths.
-      confirmed: Explicit user confirmation flag. Must be True for real execution.
       dry_run: When True, simulates the action without altering disk state.
       silent: If True, suppresses Windows OS confirmation dialogs in favor of Miku's own HITL gate.
 
@@ -78,7 +111,18 @@ def safe_delete(
 
     paths_summary = ", ".join(f"'{p}'" for p in qualified_paths)
 
-    # 1. Simulation mode check
+    # 1. Circuit Breaker Check
+    if not dry_run and not REAL_FILE_DELETE_ENABLED:
+        return {
+            "status": "CIRCUIT_BREAKER_BLOCKED",
+            "executed": False,
+            "dry_run": True,
+            "paths": qualified_paths,
+            "error": "REAL_FILE_DELETE_DISABLED: Real file deletion is permanently disabled in code (REAL_FILE_DELETE_ENABLED=False).",
+            "output": f"[CIRCUIT BREAKER BLOCKED] Real file deletion is permanently disabled (REAL_FILE_DELETE_ENABLED=False). Targets: {paths_summary}",
+        }
+
+    # 2. Simulation mode check
     if dry_run:
         return {
             "status": "SIMULATED_RECYCLE_BIN",
@@ -96,7 +140,8 @@ def safe_delete(
             ),
         }
 
-    # 2. Confirmation gate check for non-dry-run
+    # 3. Live Interactive Human Confirmation Gate (Unconditional)
+    confirmed = request_live_human_delete_confirmation(paths_summary)
     if not confirmed:
         return {
             "status": "PENDING_CONFIRMATION",

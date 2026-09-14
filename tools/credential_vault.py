@@ -20,6 +20,14 @@ import sys
 from typing import Any, Dict, List, Optional
 import win32cred
 
+# ==============================================================================
+# PERMANENT SAFETY CIRCUIT BREAKER (DEFENSE IN DEPTH)
+# ==============================================================================
+# REAL CREDENTIAL MANAGER WRITE/DELETE EXECUTION IS HARD-CODED TO FALSE.
+# Real CredWrite and CredDelete calls are strictly prohibited by default.
+# This flag blocks any modification to Windows Credential Manager at the lowest level.
+REAL_CREDENTIAL_WRITE_ENABLED: bool = False
+
 
 class VaultSecret:
     """
@@ -71,6 +79,14 @@ def store_credential(
     Stores credentials in the Windows Credential Manager using win32cred.CredWrite.
     Passes Flags=0 (CRED_PRESERVE_CREDENTIAL_BLOB).
     """
+    if not REAL_CREDENTIAL_WRITE_ENABLED:
+        return {
+            "status": "CIRCUIT_BREAKER_BLOCKED",
+            "executed": False,
+            "error": "REAL_CREDENTIAL_WRITE_DISABLED: Real credential writing is permanently locked in code (REAL_CREDENTIAL_WRITE_ENABLED=False).",
+            "output": f"[CIRCUIT BREAKER BLOCKED] Real credential writing to Windows Credential Manager is disabled (REAL_CREDENTIAL_WRITE_ENABLED=False). Target: '{target_name}'.",
+        }
+
     if not target_name or not username:
         return {
             "status": "ERROR",
@@ -141,6 +157,9 @@ def delete_credential(
     """
     Deletes credentials from Windows Credential Manager.
     """
+    if not REAL_CREDENTIAL_WRITE_ENABLED:
+        return False
+
     try:
         win32cred.CredDelete(target_name, cred_type, flags)
         return True
