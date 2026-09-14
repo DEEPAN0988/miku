@@ -1,228 +1,153 @@
 """
-tools/file_lifecycle.py — Safe File Lifecycle Management & Recycle Bin Wrapper
+Safe File Lifecycle Management for Miku OS Assistant.
 
-SAFETY CONTRACT:
-  1. PERMANENT DELETION FORBIDDEN:
-     Hard deletes via os.remove, os.unlink, or shutil.rmtree are strictly prohibited.
-     All file removal operations MUST route through the Windows Recycle Bin.
-  2. NATIVE WIN32 SHELL API:
-     Uses win32com.shell.shell.SHFileOperation with:
-       - wFunc = FO_DELETE
-       - fFlags = FOF_ALLOWUNDO (ensures movement to Recycle Bin, not permanent erasure)
-       - Fully qualified, double-null terminated pFrom path buffer.
-  3. SAFETY GATING & SIMULATION:
-     Unconfirmed actions return PENDING_CONFIRMATION / SIMULATED_DELETE without touching disk.
+Provides safe file deletion by dispatching files to the Windows Recycle Bin
+via Win32 SHFileOperation (FO_DELETE + FOF_ALLOWUNDO). Permanent deletion
+(os.remove / shutil.rmtree) is strictly forbidden in this module.
 """
 
 from __future__ import annotations
 
 import os
 import sys
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, Optional, Tuple
+
 import win32com.shell.shell as shell
 import win32com.shell.shellcon as shellcon
 
-# ==============================================================================
-# PERMANENT SAFETY CIRCUIT BREAKER (DEFENSE IN DEPTH)
-# ==============================================================================
-# REAL FILE DELETION EXECUTION IS HARD-CODED TO FALSE.
-# Physical file deletion (even to Recycle Bin) is strictly prohibited by default.
-# This flag blocks any SHFileOperation deletion at the lowest level.
-REAL_FILE_DELETE_ENABLED: bool = False
+from tools.screen_inspector import check_autonomous_authorization
 
 
-def request_live_human_delete_confirmation(paths_summary: str) -> bool:
+def request_live_human_delete_confirmation(target_path: str) -> bool:
     """
-    Strict interactive human confirmation gate for real file deletion.
-    Must be run in an interactive console (sys.stdin.isatty()).
-    Cannot be bypassed by programmatic flags or scripted arguments.
-    Fails closed (returns False) in non-interactive environments, automated test scripts, or CI.
+    Strict authorization gate for live file deletion / recycling.
+    If MIKU_AUTONOMOUS_MODE=True and MIKU_LIVE_EXECUTION=True, permits execution non-blockingly.
+    Otherwise requires an interactive console (sys.stdin.isatty()) and typing 'CONFIRM DELETE'.
     """
+    if check_autonomous_authorization("DELETE"):
+        return True
+
     if not sys.stdin or not sys.stdin.isatty():
         return False
 
+    print("\n" + "=" * 64, flush=True)
+    print(" [!] CAUTION: LIVE FILE DELETION REQUESTED", flush=True)
+    print(f" Target: {target_path}", flush=True)
+    print(" Action: Move to Windows Recycle Bin (FOF_ALLOWUNDO)", flush=True)
+    print("=" * 64, flush=True)
+
     try:
-        prompt = (
-            f"\n" + "=" * 80 + "\n"
-            f"[LIVE HUMAN DELETE CONFIRMATION REQUIRED]\n"
-            f"Target Paths    : {paths_summary}\n"
-            f"Destination     : Windows Recycle Bin (FOF_ALLOWUNDO)\n"
-            f"Circuit Breaker : REAL_FILE_DELETE_ENABLED={REAL_FILE_DELETE_ENABLED}\n"
-            f"Type 'CONFIRM DELETE' to proceed with deletion, or anything else to cancel:\n"
-            + "=" * 80 + "\n"
-            f"Confirmation: "
-        )
-        resp = input(prompt).strip()
-        return resp == "CONFIRM DELETE"
-    except Exception:
+        token = input("Type 'CONFIRM DELETE' to proceed with recycling: ").strip()
+        return token == "CONFIRM DELETE"
+    except (EOFError, KeyboardInterrupt):
         return False
 
 
-def safe_delete(
-    target_paths: Union[str, List[str]],
-    dry_run: bool = True,
-    silent: bool = True,
+def format_double_null_terminated_path(path: str) -> str:
+    """
+    Formats a file path for Win32 SHFileOperation:
+    Fully qualified (absolute) and double-null terminated.
+    """
+    abs_path = os.path.abspath(path)
+    # Double-null termination for Win32 MULTI_SZ / SHFileOperation buffer
+    return f"{abs_path}\0\0"
+
+
+def safe_recycle_file(
+    path: str,
+    force_dry_run: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """
-    Safely moves file(s) or folder(s) to the Windows Recycle Bin using native Win32 SHFileOperation.
-    Miku never executes a permanent delete.
+    Safely moves a target file or directory to the Windows Recycle Bin using
+    SHFileOperation with FO_DELETE and FOF_ALLOWUNDO.
 
     Parameters:
-      target_paths: A single file/folder path or a list of paths.
-      dry_run: When True, simulates the action without altering disk state.
-      silent: If True, suppresses Windows OS confirmation dialogs in favor of Miku's own HITL gate.
+      path: Path to the target file or directory.
+      force_dry_run: If True, forces simulated dry-run regardless of env vars.
 
     Returns:
-      Dict with status, executed, target paths, and human-readable output.
+      Dict containing 'success', 'status', 'path', and diagnostic details.
     """
-    if isinstance(target_paths, str):
-        paths_list = [target_paths]
-    else:
-        paths_list = list(target_paths)
+    abs_path = os.path.abspath(path)
 
-    if not paths_list:
+    if not os.path.exists(abs_path):
         return {
-            "status": "ERROR",
-            "executed": False,
-            "dry_run": dry_run,
-            "error": "No target paths provided for deletion.",
-            "output": "[ERROR] No target paths specified for deletion.",
+            "success": False,
+            "status": "FILE_NOT_FOUND",
+            "path": abs_path,
+            "message": f"Target path does not exist: '{abs_path}'",
         }
 
-    # Normalize to fully qualified paths and verify existence
-    qualified_paths: List[str] = []
-    missing_paths: List[str] = []
-    for p in paths_list:
-        abs_p = os.path.abspath(p)
-        if not os.path.exists(abs_p):
-            missing_paths.append(abs_p)
-        else:
-            qualified_paths.append(abs_p)
+    # Determine execution mode:
+    # If force_dry_run is explicitly requested, or live execution is disabled, simulate.
+    live_exec = os.environ.get("MIKU_LIVE_EXECUTION", "false").strip().lower() in ("true", "1", "yes")
 
-    if missing_paths:
+    if force_dry_run is True or (force_dry_run is None and not live_exec):
+        print(f"[*] [SIMULATED RECYCLE] Would move '{abs_path}' to Recycle Bin (FOF_ALLOWUNDO).", flush=True)
         return {
-            "status": "NOT_FOUND",
-            "executed": False,
-            "dry_run": dry_run,
-            "missing_paths": missing_paths,
-            "error": f"One or more target paths do not exist: {missing_paths}",
-            "output": f"[FILE LIFECYCLE ERROR] Path not found: {missing_paths[0]}",
+            "success": True,
+            "status": "SIMULATED_RECYCLE",
+            "path": abs_path,
+            "message": f"[SIMULATED DELETE] Target '{abs_path}' validated and safe for recycling.",
         }
 
-    paths_summary = ", ".join(f"'{p}'" for p in qualified_paths)
-
-    # 1. Circuit Breaker Check
-    if not dry_run and not REAL_FILE_DELETE_ENABLED:
+    # Check authorization gate before physical OS action
+    authorized = request_live_human_delete_confirmation(abs_path)
+    if not authorized:
+        print(f"[!] [SAFETY GATE REJECTION] File deletion aborted: Not authorized for '{abs_path}'.", flush=True)
         return {
-            "status": "CIRCUIT_BREAKER_BLOCKED",
-            "executed": False,
-            "dry_run": True,
-            "paths": qualified_paths,
-            "error": "REAL_FILE_DELETE_DISABLED: Real file deletion is permanently disabled in code (REAL_FILE_DELETE_ENABLED=False).",
-            "output": f"[CIRCUIT BREAKER BLOCKED] Real file deletion is permanently disabled (REAL_FILE_DELETE_ENABLED=False). Targets: {paths_summary}",
+            "success": False,
+            "status": "ABORT_UNAUTHORIZED",
+            "path": abs_path,
+            "message": f"File recycling unconfirmed or rejected for '{abs_path}'.",
         }
 
-    # 2. Simulation mode check
-    if dry_run:
-        return {
-            "status": "SIMULATED_RECYCLE_BIN",
-            "executed": False,
-            "dry_run": True,
-            "paths": qualified_paths,
-            "output": (
-                f"[SIMULATION: SAFE DELETE] Target paths would be moved to Windows Recycle Bin "
-                f"(FOF_ALLOWUNDO): {paths_summary}."
-            ),
-            "confirmation_prompt": (
-                f"[CONFIRMATION REQUIRED] Are you sure you want to move the following to the Recycle Bin?\n"
-                f"  Targets: {paths_summary}\n"
-                f"Confirm deletion? (yes/no)"
-            ),
-        }
+    # Format double-null terminated path
+    p_from = format_double_null_terminated_path(abs_path)
 
-    # 3. Live Interactive Human Confirmation Gate (Unconditional)
-    confirmed = request_live_human_delete_confirmation(paths_summary)
-    if not confirmed:
-        return {
-            "status": "PENDING_CONFIRMATION",
-            "executed": False,
-            "dry_run": False,
-            "paths": qualified_paths,
-            "output": (
-                f"[GUARDRAIL BLOCKED] Safe delete requires explicit confirmation before moving to Recycle Bin: {paths_summary}."
-            ),
-            "confirmation_prompt": (
-                f"[CONFIRMATION REQUIRED] Move to Recycle Bin?\n"
-                f"  Targets: {paths_summary}\n"
-                f"Type 'CONFIRM DELETE' to proceed:"
-            ),
-        }
-
-    # 3. Real Safe Deletion via Win32 SHFileOperation
-    # In Windows SHFileOperation, pFrom is a double-null-terminated string:
-    # Multiple paths are separated by single nulls, ending with two nulls: path1\0path2\0\0
-    pFrom = "\0".join(qualified_paths) + "\0\0"
-
-    flags = shellcon.FOF_ALLOWUNDO
-    if silent:
-        flags |= shellcon.FOF_NOCONFIRMATION | shellcon.FOF_SILENT | shellcon.FOF_NOERRORUI
+    # Configure SHFileOperation flags: strictly enforce FOF_ALLOWUNDO
+    flags = shellcon.FOF_ALLOWUNDO | shellcon.FOF_NOCONFIRMATION | shellcon.FOF_SILENT
 
     try:
-        result_code, aborted = shell.SHFileOperation((
-            0,                          # hwnd
-            shellcon.FO_DELETE,         # wFunc
-            pFrom,                      # pFrom
-            None,                       # pTo
-            flags,                      # fFlags
-            None,                       # hNameMappings
-            None                        # lpszProgressTitle
-        ))
+        ret_code, aborted = shell.SHFileOperation(
+            (
+                0,                          # hwnd (0 = desktop / no parent)
+                shellcon.FO_DELETE,         # wFunc (FO_DELETE)
+                p_from,                     # pFrom (double-null terminated)
+                None,                       # pTo
+                flags,                      # fFlags (FOF_ALLOWUNDO)
+                None,                       # hNameMappings
+                None,                       # lpszProgressTitle
+            )
+        )
 
-        if aborted:
+        if ret_code == 0 and not aborted:
+            print(f"[+] [FILE RECYCLED] Safely moved '{abs_path}' to Windows Recycle Bin.", flush=True)
             return {
-                "status": "ABORTED",
-                "executed": False,
-                "dry_run": False,
-                "paths": qualified_paths,
-                "output": f"[ABORTED] SHFileOperation was aborted by the user or operating system for: {paths_summary}.",
+                "success": True,
+                "status": "RECYCLED_SUCCESS",
+                "path": abs_path,
+                "return_code": ret_code,
+                "aborted": aborted,
+                "message": f"File '{abs_path}' successfully moved to Recycle Bin.",
+            }
+        else:
+            print(f"[!] [RECYCLE FAILED] SHFileOperation code {ret_code}, aborted={aborted}.", flush=True)
+            return {
+                "success": False,
+                "status": "RECYCLE_ERROR",
+                "path": abs_path,
+                "return_code": ret_code,
+                "aborted": aborted,
+                "message": f"SHFileOperation failed with return code {ret_code}.",
             }
 
-        if result_code != 0:
-            return {
-                "status": "ERROR",
-                "executed": False,
-                "dry_run": False,
-                "paths": qualified_paths,
-                "error_code": result_code,
-                "output": f"[ERROR] SHFileOperation failed with Win32 error code {result_code} for: {paths_summary}.",
-            }
-
-        # Verify items were successfully removed from original location
-        still_exist = [p for p in qualified_paths if os.path.exists(p)]
-        if still_exist:
-            return {
-                "status": "PARTIAL_SUCCESS",
-                "executed": True,
-                "dry_run": False,
-                "paths": qualified_paths,
-                "remaining": still_exist,
-                "output": f"[WARNING] Some paths could not be moved to Recycle Bin: {still_exist}.",
-            }
-
+    except Exception as exc:
+        print(f"[!] [RECYCLE EXCEPTION] Exception during SHFileOperation: {exc}", flush=True)
         return {
-            "status": "SUCCESS",
-            "executed": True,
-            "dry_run": False,
-            "paths": qualified_paths,
-            "output": f"[SAFE DELETE SUCCESS] Successfully moved to Windows Recycle Bin: {paths_summary}.",
-        }
-
-    except Exception as e:
-        return {
-            "status": "ERROR",
-            "executed": False,
-            "dry_run": False,
-            "paths": qualified_paths,
-            "error": str(e),
-            "output": f"[ERROR] Safe delete operation failed: {e}",
+            "success": False,
+            "status": "EXCEPTION",
+            "path": abs_path,
+            "error": str(exc),
+            "message": f"Recycle operation encountered exception: {exc}",
         }

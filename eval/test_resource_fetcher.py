@@ -1,156 +1,141 @@
 """
-eval/test_resource_fetcher.py — Unit Tests for Smart Resource Fetcher & Entity Classifier
+Unit tests for tools.resource_fetcher (WinGet wrapper and BrowserDownloadMonitor).
 """
 
+from __future__ import annotations
+
 import os
-import shutil
-import sys
+from pathlib import Path
 import tempfile
-import threading
 import time
 import unittest
-
-sys.path.insert(0, os.path.abspath("."))
+from unittest.mock import patch, MagicMock
 
 from tools.resource_fetcher import (
-    ResourceType,
-    classify_resource_request,
-    dispatch_resource_fetch,
-    format_search_url_for_resource,
-    monitor_download_completion,
-    search_winget,
+    BrowserDownloadMonitor,
+    parse_winget_search_table,
+    sanitize_package_id,
+    winget_install_package,
 )
 
 
 class TestResourceFetcher(unittest.TestCase):
+    def setUp(self):
+        self.orig_live = os.environ.get("MIKU_LIVE_EXECUTION")
+        self.orig_auto = os.environ.get("MIKU_AUTONOMOUS_MODE")
 
-    def test_entity_classifier(self):
-        """Verify classification across applications, datasets, media, and documents."""
-        # Application
-        app_res = classify_resource_request("install vscode")
-        self.assertEqual(app_res["category"], ResourceType.APPLICATION)
-        self.assertIn("vscode", app_res["target_entity"].lower())
+    def tearDown(self):
+        if self.orig_live is not None:
+            os.environ["MIKU_LIVE_EXECUTION"] = self.orig_live
+        else:
+            os.environ.pop("MIKU_LIVE_EXECUTION", None)
 
-        app_res2 = classify_resource_request("download git installer")
-        self.assertEqual(app_res2["category"], ResourceType.APPLICATION)
+        if self.orig_auto is not None:
+            os.environ["MIKU_AUTONOMOUS_MODE"] = self.orig_auto
+        else:
+            os.environ.pop("MIKU_AUTONOMOUS_MODE", None)
 
-        # Dataset
-        ds_res = classify_resource_request("download kaggle titanic dataset")
-        self.assertEqual(ds_res["category"], ResourceType.DATASET)
+    def test_sanitize_package_id(self):
+        valid_ids = ["Git.Git", "Python.Python.3.11", "Microsoft.PowerToys", "7zip.7zip", "app-123_456"]
+        for pkg in valid_ids:
+            ok, val = sanitize_package_id(pkg)
+            self.assertTrue(ok, f"Expected {pkg} to be valid.")
+            self.assertEqual(val, pkg)
 
-        ds_res2 = classify_resource_request("fetch parquet corpus for llama")
-        self.assertEqual(ds_res2["category"], ResourceType.DATASET)
+        invalid_ids = [
+            "",
+            "   ",
+            "Git.Git; calc.exe",
+            "foo & bar",
+            "pkg|evil",
+            "id with spaces",
+            "id>output",
+            "a" * 150,
+        ]
+        for pkg in invalid_ids:
+            ok, _ = sanitize_package_id(pkg)
+            self.assertFalse(ok, f"Expected {pkg} to be rejected.")
 
-        # Media
-        media_res = classify_resource_request("download lofi beats video")
-        self.assertEqual(media_res["category"], ResourceType.MEDIA)
+    def test_parse_winget_search_table(self):
+        sample_output = """
+Name                                                               Id                                             Version                Match                                     Source
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Git                                                                Git.Git                                        2.55.0.3                                                         winget
+Microsoft Git                                                      Microsoft.Git                                  2.55.0.0.8                                                       winget
+"""
+        records = parse_winget_search_table(sample_output)
+        self.assertEqual(len(records), 2)
+        self.assertEqual(records[0]["id"], "Git.Git")
+        self.assertEqual(records[0]["version"], "2.55.0.3")
+        self.assertEqual(records[1]["id"], "Microsoft.Git")
 
-        # Document
-        doc_res = classify_resource_request("download attention is all you need paper pdf")
-        self.assertEqual(doc_res["category"], ResourceType.DOCUMENT)
+    def test_winget_install_dry_run_simulation(self):
+        os.environ["MIKU_LIVE_EXECUTION"] = "false"
+        result = winget_install_package("Git.Git", force_dry_run=True)
+        self.assertTrue(result["success"])
+        self.assertEqual(result["status"], "SIMULATED_INSTALL")
+        self.assertEqual(result["package_id"], "Git.Git")
 
-    def test_dispatch_application_dry_run(self):
-        """Verify application query produces winget search in dry_run mode."""
-        res = dispatch_resource_fetch("install vlc", dry_run=True)
-        self.assertEqual(res["status"], "SIMULATED_APP_FETCH")
-        self.assertEqual(res["action"], "winget_search")
-        self.assertEqual(res["category"], "APPLICATION")
-        self.assertIn("winget search", res["command"])
+    def test_winget_install_invalid_id_rejected(self):
+        result = winget_install_package("Git.Git; calc.exe")
+        self.assertFalse(result["success"])
+        self.assertEqual(result["status"], "INVALID_PACKAGE_ID")
 
-    def test_dispatch_application_with_mock_winget(self):
-        """Verify application query parses winget matches properly when runner is mocked."""
-        from unittest.mock import patch
+    def test_winget_install_unauthorized(self):
+        os.environ["MIKU_LIVE_EXECUTION"] = "true"
+        os.environ["MIKU_AUTONOMOUS_MODE"] = "false"
 
-        def mock_winget_runner(cmd):
-            return {
-                "status": "SUCCESS",
-                "found": True,
-                "package_name": "vlc",
-                "packages": [
-                    {"name": "VLC media player", "id": "VideoLAN.VLC", "version": "3.0.23", "source": "winget"}
-                ],
-                "raw_output": "VLC media player  VideoLAN.VLC  3.0.23  winget",
-                "error": None,
-            }
+        with patch("sys.stdin.isatty", return_value=False):
+            result = winget_install_package("Git.Git")
+            self.assertFalse(result["success"])
+            self.assertEqual(result["status"], "ABORT_UNAUTHORIZED")
 
-        with patch("tools.resource_fetcher.REAL_RESOURCE_FETCH_ENABLED", True):
-            res = dispatch_resource_fetch("install vlc", dry_run=False, winget_runner=mock_winget_runner)
-            self.assertEqual(res["status"], "WINGET_MATCH_FOUND")
-            self.assertEqual(res["recommended_id"], "VideoLAN.VLC")
-            self.assertIn("winget install --id VideoLAN.VLC", res["recommended_command"])
-
-    def test_dispatch_application_circuit_breaker_fails_closed(self):
-        """Verify that real non-dry-run dispatch is blocked by circuit breaker by default."""
-        res = dispatch_resource_fetch("install vlc", dry_run=False)
-        self.assertEqual(res["status"], "CIRCUIT_BREAKER_BLOCKED")
-        self.assertFalse(res["executed"])
-
-    def test_dispatch_dataset_formats_browser_query(self):
-        """Verify dataset query formats browser search URL."""
-        res = dispatch_resource_fetch("download common crawl dataset", dry_run=True)
-        self.assertEqual(res["status"], "SIMULATED_BROWSER_SEARCH")
-        self.assertEqual(res["category"], "DATASET")
-        self.assertIn("common%20crawl", res["url"])
-        self.assertIn("dataset download", res["search_query"])
-
-    def test_dispatch_document_formats_browser_query(self):
-        """Verify document query formats PDF-targeted search URL."""
-        res = dispatch_resource_fetch("download transformer paper pdf", dry_run=True)
-        self.assertEqual(res["status"], "SIMULATED_BROWSER_SEARCH")
-        self.assertEqual(res["category"], "DOCUMENT")
-        self.assertIn("filetype%3Apdf", res["url"])
-
-    def test_download_monitor_from_partial(self):
-        """Verify monitor detects .crdownload transitioning to completed file."""
+    def test_browser_download_monitor_resolution(self):
         temp_dir = tempfile.mkdtemp()
+        completed_events = []
+
+        def callback(filepath: str, size: int):
+            completed_events.append((filepath, size))
+
         try:
-            partial_path = os.path.join(temp_dir, "test_archive.zip.crdownload")
-            final_path = os.path.join(temp_dir, "test_archive.zip")
-
-            # Create partial file
-            with open(partial_path, "wb") as f:
-                f.write(b"in progress bytes...")
-
-            start_t = time.time()
-
-            # Schedule rename in 0.8s
-            def finish_download():
-                time.sleep(0.8)
-                if os.path.exists(partial_path):
-                    with open(final_path, "wb") as f:
-                        f.write(b"complete download bytes 1234567890")
-                    os.unlink(partial_path)
-
-            th = threading.Thread(target=finish_download)
-            th.start()
-
-            res = monitor_download_completion(
-                downloads_dir=temp_dir,
-                timeout=5.0,
-                poll_interval=0.2,
-                start_time=start_t,
+            monitor = BrowserDownloadMonitor(
+                download_dir=temp_dir,
+                poll_interval=0.1,
+                on_download_complete=callback,
             )
-            th.join()
 
-            self.assertEqual(res["status"], "DOWNLOAD_COMPLETED")
-            self.assertEqual(res["file_name"], "test_archive.zip")
-            self.assertTrue(res["size_bytes"] > 0)
-            self.assertTrue(res["from_partial"])
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
+            # Test target filename resolution helper
+            p_cr = Path(temp_dir) / "document.pdf.crdownload"
+            p_part = Path(temp_dir) / "image.png.part"
+            self.assertEqual(BrowserDownloadMonitor.resolve_target_filename(p_cr).name, "document.pdf")
+            self.assertEqual(BrowserDownloadMonitor.resolve_target_filename(p_part).name, "image.png")
 
-    def test_download_monitor_timeout(self):
-        """Verify monitor times out gracefully when no download occurs."""
-        temp_dir = tempfile.mkdtemp()
-        try:
-            res = monitor_download_completion(
-                downloads_dir=temp_dir,
-                timeout=1.0,
-                poll_interval=0.2,
-            )
-            self.assertEqual(res["status"], "DOWNLOAD_TIMEOUT")
-            self.assertTrue(res["timed_out"])
+            # 1. Step 1: Active download starts (.crdownload file created)
+            p_cr.write_bytes(b"partial byte data")
+
+            # Poll once to register active download
+            finished = monitor.poll_once()
+            self.assertEqual(len(finished), 0)
+            self.assertIn(str(p_cr.resolve()), monitor._active_downloads)
+
+            # 2. Step 2: Download completes (.crdownload renamed to target file)
+            final_target = Path(temp_dir) / "document.pdf"
+            p_cr.unlink()
+            final_target.write_bytes(b"complete final pdf content 1234567890")
+
+            # Poll again to resolve completed download
+            finished = monitor.poll_once()
+            self.assertEqual(len(finished), 1)
+            self.assertEqual(finished[0]["filename"], "document.pdf")
+            self.assertEqual(finished[0]["size_bytes"], len(b"complete final pdf content 1234567890"))
+            self.assertEqual(len(completed_events), 1)
+            self.assertEqual(completed_events[0][0], str(final_target))
+
+            # Active downloads tracking should be cleared
+            self.assertNotIn(str(p_cr.resolve()), monitor._active_downloads)
+
         finally:
+            import shutil
             shutil.rmtree(temp_dir, ignore_errors=True)
 
 
