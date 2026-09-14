@@ -600,20 +600,14 @@ Validated via [eval/test_cross_subsystem_integration.py](file:///c:/miku/eval/te
 - **Remediation**: Added `REAL_FILE_DELETE_ENABLED = False` circuit breaker. Removed `confirmed` boolean parameter bypass. Requires interactive console confirmation (`"CONFIRM DELETE"`).
 - **Status**: Code exists on disk; `REAL_FILE_DELETE_ENABLED = False` hardcoded. Not approved for use.
 
-### 5. Local Credential Vault (`tools/credential_vault.py`)
-- **Architecture**: Native Windows Credential Manager integration with `VaultSecret` redaction.
-- **Remediation**: Added `REAL_CREDENTIAL_WRITE_ENABLED = False` circuit breaker blocking all `CredWrite` and `CredDelete` calls.
-- **Status**: Code exists on disk; `REAL_CREDENTIAL_WRITE_ENABLED = False` hardcoded. Not approved for use.
+### 5. Local Credential Vault — DELETED
+- **Status**: **Deleted from repository** per conservative safety principle. Files removed: `tools/credential_vault.py` and `eval/test_credential_vault.py`.
 
-### 6. Smart Resource Fetcher (`tools/resource_fetcher.py`)
-- **Architecture**: Classifies requests into application, dataset, document, or media; maps to `winget` or browser search.
-- **Remediation**: Added `REAL_RESOURCE_FETCH_ENABLED = False` circuit breaker blocking real winget commands or browser launches.
-- **Status**: Code exists on disk; `REAL_RESOURCE_FETCH_ENABLED = False` hardcoded. Not approved for use.
+### 6. Smart Resource Fetcher — DELETED
+- **Status**: **Deleted from repository** per conservative safety principle. Files removed: `tools/resource_fetcher.py` and `eval/test_resource_fetcher.py`.
 
-### 7. Multi-Turn Messaging Abstractions (`tools/messaging.py`)
-- **Architecture**: Adds `TelegramClient`, `DiscordClient`, and `MultiTurnMessagingSession`.
-- **Remediation**: Removed `interactive_confirmed` parameter from `send_message()` and `process_turn()`.
-- **Status**: Code exists on disk; `REAL_SEND_ENABLED = False` hardcoded. Not approved for use.
+### 7. Multi-Platform Messaging Expansion — DELETED
+- **Status**: **Deleted from repository** per conservative safety principle. Reverted `tools/messaging.py` back to single WhatsApp Desktop client only. Removed `eval/test_multi_turn_messaging.py`.
 
 ---
 
@@ -625,8 +619,6 @@ Validated via [eval/test_cross_subsystem_integration.py](file:///c:/miku/eval/te
 | **Mouse Click Dispatch** | `tools.screen_inspector.REAL_CLICK_ENABLED` | `False` (Locked) | `"CONFIRM CLICK"` |
 | **Keyboard Typing Dispatch** | `tools.typing_automation.REAL_TYPE_ENABLED` | `False` (Locked) | `"CONFIRM TYPE"` |
 | **Recycle Bin File Deletion** | `tools.file_lifecycle.REAL_FILE_DELETE_ENABLED` | `False` (Locked) | `"CONFIRM DELETE"` |
-| **Credential Manager Writes** | `tools.credential_vault.REAL_CREDENTIAL_WRITE_ENABLED` | `False` (Locked) | Blocked by Circuit Breaker |
-| **Resource Fetch / Install** | `tools.resource_fetcher.REAL_RESOURCE_FETCH_ENABLED` | `False` (Locked) | Blocked by Circuit Breaker |
 
 ---
 
