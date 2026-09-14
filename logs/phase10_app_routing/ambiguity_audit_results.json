@@ -197,7 +197,7 @@
       ],
       "bm25_top1_ok": false,
       "bm25_top3_ok": false,
-      "neural_action": "Get chrome running",
+      "neural_action": "Get chlish running",
       "neural_ok": false,
       "anchored_action": "Open App",
       "anchored_ok": true,

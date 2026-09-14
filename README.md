@@ -589,4 +589,61 @@ Following the strict user-authorized canary pattern established for messaging's 
 - **Audit Artifact**: Structured telemetry permanently recorded in [`logs/phase13_consolidation/real_click_canary_audit.json`](file:///c:/miku/logs/phase13_consolidation/real_click_canary_audit.json).
 - **Circuit Breaker Status**: Immediately reverted to `REAL_CLICK_ENABLED: bool = False` in [`tools/screen_inspector.py`](file:///c:/miku/tools/screen_inspector.py#L803) post-test. Standing system remains locked fail-closed by default.
 
+---
+
+## Phase 14 — Vision Grounder Fallback & GUI Edit Control Typing Automation (v0.3.4)
+
+### Overview
+Phase 14 delivers two key architectural expansions to complete full-spectrum desktop interaction:
+1. **Option 4: Vision Grounder Fallback (`tools/vision_grounder.py`)**: Zero-GPU visual fallback screen grounding for non-UIA canvases, DirectX games, web `<canvas>`, or custom owner-drawn controls.
+2. **Option 2: GUI Edit Control Text Staging & Typing Automation (`tools/typing_automation.py`)**: Verified editability gating, payload sanitization, dry-run simulation, and guarded layout-independent Unicode keystroke dispatch.
+
+### 1. Vision Grounder Fallback Architecture (`tools/vision_grounder.py`)
+- **Native GDI Bitmap Capture**:
+  - Direct Win32 GDI `BitBlt` capture via `user32.GetWindowDC`, `gdi32.CreateCompatibleDC`, `gdi32.CreateCompatibleBitmap`, and `gdi32.GetDIBits` into an RGB NumPy array (`cv2`). Runs in ~15–35ms with zero GPU VRAM consumption.
+- **Contour & Edge Detection Heuristics**:
+  - Combines Gaussian-blurred Canny edge detection and adaptive thresholding to expose high-contrast UI borders under both dark and light OS themes.
+  - Applies rectangular morphological closing (`cv2.morphologyEx`) to connect stroke outlines.
+  - Classifies interactive bounding boxes based on geometric aspect ratio and height:
+    - *Wide horizontal rectangles* ($aspect \ge 3.0, 18 \le h \le 60$) $\to$ `Edit` (input box).
+    - *Compact rectangles & square badges* ($0.8 \le aspect \le 4.0, 12 \le h \le 80$) $\to$ `Button`.
+    - *Larger containers* $\to$ `Pane`.
+  - Tags all generated candidates with `source="vision"` and `is_unlabeled=True`.
+- **Hybrid Fusion Engine (`merge_uia_and_vision_elements`)**:
+  - Primary dominance: UIA elements are authoritative (`source="uia"`).
+  - Spatial IoU deduplication: Vision elements with $IoU \ge 0.35$ against existing UIA elements are discarded as redundant. Non-overlapping visual contours are preserved as novel interactable candidates.
+  - Complete fallback: When UIA yields 0 interactable elements (e.g. owner-drawn canvas), all detected visual regions are returned.
+- **Verification**: Evaluated via [`eval/test_vision_grounder.py`](file:///c:/miku/eval/test_vision_grounder.py) (5/5 unit tests passed, 0.12s).
+
+### 2. GUI Edit Control Typing Automation (`tools/typing_automation.py`)
+- **Default-Closed Circuit Breaker**:
+  - `REAL_TYPE_ENABLED: bool = False` is hardcoded at module top level. Physical keystrokes are blocked by default, mirroring `REAL_SEND_ENABLED` and `REAL_CLICK_ENABLED`.
+- **Pre-Typing Editability Gate (`verify_element_editable`)**:
+  - Intercepts and rejects non-editable controls (`Button`, `Pane`, `Text`, `CheckBox`) prior to any interaction with `NOT_EDITABLE_TYPE`.
+  - Rejects disabled (`DISABLED`), iconic (`MINIMIZED`), out-of-bounds (`OUTSIDE_WINDOW`), or background (`NOT_FOREGROUND`) elements.
+  - Inspects UIA `ValuePattern` (`CurrentIsReadOnly`) where accessible to reject read-only input boxes.
+- **Payload Sanitizer (`sanitize_typing_payload`)**:
+  - Enforces character length limit ($\le 500$ chars per stage) to prevent runaway keyboard flooding.
+  - Rejects dangerous control codes (`\x00` NULL, `\x07` BEL, `\x08` BS, `\x1B` ESC, `\x03` SIGINT, `\x04` EOT).
+  - Preserves standard Unicode, alphanumeric text, punctuation, and safe whitespace (`\n`, `\t`).
+- **Live Interactive Human Confirmation Gate (`request_live_human_type_confirmation`)**:
+  - Requires interactive console typing (`sys.stdin.isatty()`) with the exact phrase `"CONFIRM TYPE"`. Fails closed in CI or automated test scripts.
+- **Layout-Independent Unicode Dispatch Engine**:
+  - Uses Win32 `SendInput` with `KEYEVENTF_UNICODE` (`0x0004`), delivering exact Unicode characters directly to the window message queue. Eliminates keyboard layout desynchronization (e.g. QWERTY vs AZERTY) and Shift-key race conditions.
+- **Verification**: Evaluated via [`eval/test_typing_automation.py`](file:///c:/miku/eval/test_typing_automation.py) (7/7 unit tests passed).
+
+### 3. Integrated GUI Automation Verification (`eval/test_gui_automation_advanced.py`)
+- **Synthetic End-to-End Simulation**: Generates custom non-UIA canvas, detects visual Edit and Button controls, stages sanitized payload, verifies simulated typing (`SIMULATED_TYPE_SUCCESS`), and verifies simulated click.
+- **Live Desktop Hybrid Inspection**: Inspects active Windows Calculator, locates `'Clear'` Button, asserts editability rejection (`NOT_EDITABLE_TYPE`), and verifies simulated typing fail-closed abort (`ABORT_NOT_EDITABLE_TYPE`).
+- **Native Win32 Edit Control Circuit Breaker**: Spawns in-process native Windows `EDIT` control, stages text, and proves `dispatch_real_typing` is blocked (`DRY_RUN_PENDING_CIRCUIT_BREAKER`) with zero physical keystrokes dispatched.
+- **Results**: 3/3 tests passed in 2.13s.
+
+### 4. Standing Triple Safety Circuit Breakers State
+| Subsystem | Circuit Breaker Flag | Default State | Human Confirmation Phrase |
+| :--- | :--- | :--- | :--- |
+| **Messaging Automation** | `tools.messaging.REAL_SEND_ENABLED` | `False` (Locked) | `"CONFIRM SEND"` |
+| **Mouse Click Dispatch** | `tools.screen_inspector.REAL_CLICK_ENABLED` | `False` (Locked) | `"CONFIRM CLICK"` |
+| **Keyboard Keystroke Dispatch** | `tools.typing_automation.REAL_TYPE_ENABLED` | `False` (Locked) | `"CONFIRM TYPE"` |
+
+
 

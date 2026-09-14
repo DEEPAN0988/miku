@@ -11,7 +11,7 @@
       "step": 1,
       "action": "open_and_inspect_calculator",
       "app_output": "[REAL APP LAUNCH] Launched application 'calculator' via target 'calc.exe'.",
-      "hwnd": 657594,
+      "hwnd": 1639884,
       "elements_count": 36,
       "target_element": "Clear",
       "sim_click_status": "SIMULATED_CLICK_SUCCESS",
@@ -21,7 +21,7 @@
       "step": 2,
       "action": "get_battery_telemetry",
       "routed": "Get Battery",
-      "output": "[REAL BATTERY STATUS] Battery: 78% | State: Discharging (On Battery) | Remaining: 99 min"
+      "output": "[REAL BATTERY STATUS] Battery: 67% | State: Discharging (On Battery) | Remaining: 61 min"
     },
     {
       "step": 3,
@@ -38,7 +38,7 @@
     {
       "step": 4,
       "action": "secondary_screen_grounding",
-      "hwnd": 657594,
+      "hwnd": 1639884,
       "title": "Calculator",
       "elements_inspected": 36
     },

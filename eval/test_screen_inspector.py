@@ -566,12 +566,15 @@ class TestSimulatedClickDispatcherLive(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        global CALC_HWND
+        CALC_HWND = 0
         for p in psutil.process_iter(["name"]):
             if p.info["name"] and any(x in p.info["name"].lower() for x in ["calculator", "calc"]):
                 try:
                     p.terminate()
                 except Exception:
                     pass
+        time.sleep(0.5)
 
     def setUp(self):
         self.calc_hwnd = get_or_spawn_calculator()
@@ -579,7 +582,7 @@ class TestSimulatedClickDispatcherLive(unittest.TestCase):
         user32.ShowWindow(self.calc_hwnd, win32con.SW_RESTORE)
         user32.ShowWindow(self.calc_hwnd, win32con.SW_SHOWNORMAL)
         set_window_foreground_passive(self.calc_hwnd)
-        time.sleep(0.3)
+        time.sleep(0.4)
 
     def test_circuit_breaker_disabled_by_default(self):
         """Permanent safety circuit breaker must be hardcoded to False."""

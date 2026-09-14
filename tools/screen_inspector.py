@@ -227,6 +227,7 @@ def inspect_screen_elements(
     interactive_only: bool = True,
     wake_chromium: bool = True,
     target_hwnd: Optional[int] = None,
+    fallback_to_vision: bool = False,
 ) -> ScreenSnapshot:
     """
     Inspects and returns a structured list of interactive elements for the given
@@ -247,6 +248,7 @@ def inspect_screen_elements(
       interactive_only: If True, filters strictly to INTERACTIVE_CONTROL_TYPES.
       wake_chromium: If True, auto-detects Chromium/Electron windows and sends WM_GETOBJECT.
       target_hwnd: Backward-compatibility alias for hwnd.
+      fallback_to_vision: If True and UIA tree yields 0 interactable elements, triggers visual contour detection fallback.
 
     Returns:
       ScreenSnapshot containing metadata and list of UIElement objects.
@@ -472,6 +474,22 @@ def inspect_screen_elements(
             except Exception:
                 continue
 
+        if fallback_to_vision and len(elements) == 0:
+            try:
+                from tools.vision_grounder import (
+                    capture_window_bitmap,
+                    detect_visual_interactive_regions,
+                    merge_uia_and_vision_elements,
+                )
+                capture = capture_window_bitmap(target_hwnd)
+                if capture is not None:
+                    img_bgr, win_bounds = capture
+                    origin = (win_bounds[0], win_bounds[1])
+                    v_elements = detect_visual_interactive_regions(img_bgr, window_origin=origin)
+                    elements = merge_uia_and_vision_elements(elements, v_elements)
+            except Exception:
+                pass
+
         latency = round((time.perf_counter() - t0) * 1000, 2)
         return ScreenSnapshot(
             hwnd=target_hwnd,
@@ -498,7 +516,8 @@ def inspect_screen_elements(
         )
 
 
-# Backward compatibility alias
+# Aliases
+inspect_screen = inspect_screen_elements
 inspect_active_window = inspect_screen_elements
 
 
