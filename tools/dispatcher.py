@@ -383,7 +383,7 @@ def extract_deterministic_slot(instruction: str, action: str) -> Optional[str]:
         return "None"
 
     if action == "Open App":
-        m = re.search(r"(?:open|launch|start|run|boot up|bring up|fire up|execute|get)\s+(?:the\s+|up\s+)?([a-zA-Z0-9_\-]+)", text, re.I)
+        m = re.search(r"(?:open|launch|start|run|boot up|bring up|fire up|execute|get)\s+(?:the\s+|up\s+)?([a-zA-Z0-9_\-]+(?:\s+[a-zA-Z0-9_\-]+)*)", text, re.I)
         if m:
             arg = m.group(1).strip().lower()
             if arg not in ("the", "a", "an", "up", "for", "me", "program", "app", "application"):

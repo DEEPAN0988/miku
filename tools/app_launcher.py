@@ -101,10 +101,17 @@ def resolve_app_path(app_name: str) -> Optional[Tuple[str, str]]:
     if cleaned in shortcuts:
         return cleaned, shortcuts[cleaned]
 
-    # Partial / substring match in Start Menu shortcuts
+    # Partial / substring match in Start Menu shortcuts (deprioritize uninstaller shortcuts)
+    candidates = []
     for name, path in shortcuts.items():
-        if cleaned == name or cleaned in name.split():
-            return name, path
+        if "uninstall" in name or "remove" in name:
+            continue
+        if cleaned == name or cleaned in name or name in cleaned or cleaned in name.split():
+            candidates.append((name, path))
+
+    if candidates:
+        candidates.sort(key=lambda x: abs(len(x[0]) - len(cleaned)))
+        return candidates[0]
 
     # 3. Registry App Paths
     app_paths = scan_registry_app_paths()
