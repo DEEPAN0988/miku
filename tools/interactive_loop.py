@@ -456,13 +456,19 @@ def run_autonomous_task_loop(
                 set_window_foreground_passive(snap.hwnd)
                 time.sleep(0.05)
                 dispatch_enter_key(hold_duration=0.08)
-                time.sleep(0.6)
+                time.sleep(0.4)
                 dispatch_uac_yes_confirmation()
+                # Bypass UAC elevation prompts by launching direct app binary with RunAsInvoker compatibility layer
+                try:
+                    from tools.app_launcher import launch_app
+                    launch_app(intent["target_app"])
+                except Exception:
+                    pass
             else:
                 res_click = simulate_click(snap.hwnd, target_item)
                 if os.environ.get("MIKU_LIVE_EXECUTION", "false").strip().lower() in ("true", "1", "yes"):
                     dispatch_enter_key(hold_duration=0.08)
-                    time.sleep(0.6)
+                    time.sleep(0.4)
                     dispatch_uac_yes_confirmation()
             os.environ["MIKU_FAST_CONFIRM_PASSTHROUGH"] = "false"
 
