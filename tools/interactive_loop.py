@@ -97,11 +97,10 @@ def fast_confirm_action(action_description: str, target_details: Dict[str, Any])
     print("-" * 70)
 
     try:
-        if hasattr(sys.stdin, "flush"):
-            sys.stdin.flush()
         resp = input("Confirmation Choice: ").strip()
         return resp == "" or resp.upper() in ("Y", "YES", "OK")
-    except Exception:
+    except Exception as exc:
+        print(f"[!] Confirmation exception: {exc}")
         return False
 
 
