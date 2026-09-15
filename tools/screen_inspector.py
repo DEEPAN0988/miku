@@ -1175,6 +1175,17 @@ def human_mouse_move(
     p2_x = start_x + 0.7 * dx - (offset_mag * 0.5) * nx
     p2_y = start_y + 0.7 * dy - (offset_mag * 0.5) * ny
 
+    # Retrieve physical screen resolution for driver-level absolute mouse movement
+    try:
+        dc = user32.GetDC(0)
+        sw = ctypes.windll.gdi32.GetDeviceCaps(dc, 118)
+        sh = ctypes.windll.gdi32.GetDeviceCaps(dc, 117)
+        user32.ReleaseDC(0, dc)
+        if sw <= 0 or sh <= 0:
+            sw, sh = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+    except Exception:
+        sw, sh = user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+
     # 60 to 120 FPS tight loop
     steps = max(12, min(int(glide_duration * 100), 120))
     step_delay = glide_duration / steps
@@ -1199,10 +1210,16 @@ def human_mouse_move(
             + (u ** 3) * end_y
         )
         user32.SetCursorPos(curr_x, curr_y)
+        norm_x = int(curr_x * 65535 / max(1, sw))
+        norm_y = int(curr_y * 65535 / max(1, sh))
+        user32.mouse_event(0x8001, norm_x, norm_y, 0, 0)
         time.sleep(step_delay)
 
     # Final exact landing
     user32.SetCursorPos(end_x, end_y)
+    norm_end_x = int(end_x * 65535 / max(1, sw))
+    norm_end_y = int(end_y * 65535 / max(1, sh))
+    user32.mouse_event(0x8001, norm_end_x, norm_end_y, 0, 0)
 
 
 def dispatch_real_click(
