@@ -220,7 +220,8 @@ def run_autonomous_task_loop(
         if target_h and user32.IsWindow(target_h):
             snap.hwnd = target_h
 
-        print(f"[*] Perception HWND {snap.hwnd}: Title='{snap.title}', Class='{snap.class_name}', Process='{snap.process_name}'")
+        title_repr = repr(snap.title)
+        print(f"[*] Perception HWND {snap.hwnd}: Title={title_repr}, Class={repr(snap.class_name)}, Process='{snap.process_name}'")
         print(f"[*] Scanned Elements: {len(snap.elements)}")
 
         # Check Goal Completion: Target app window is active and foreground

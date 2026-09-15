@@ -296,6 +296,9 @@ def inspect_screen_elements(
                 error="No valid foreground window found",
             )
 
+        GA_ROOT = 2
+        root_target = user32.GetAncestor(target_hwnd, GA_ROOT) or target_hwnd
+
         # Retrieve window text
         length = user32.GetWindowTextLengthW(target_hwnd)
         t_buff = ctypes.create_unicode_buffer(length + 1)
@@ -308,9 +311,9 @@ def inspect_screen_elements(
         user32.GetClassNameW(target_hwnd, c_buff, 256)
         class_name = c_buff.value.strip()
 
-        # Retrieve bounding rectangle
+        # Retrieve bounding rectangle from root_target
         wr = wintypes.RECT()
-        user32.GetWindowRect(target_hwnd, ctypes.byref(wr))
+        user32.GetWindowRect(root_target, ctypes.byref(wr))
         w_rect = (wr.left, wr.top, wr.right, wr.bottom)
 
         # Retrieve process name safely via ctypes PID
@@ -340,13 +343,13 @@ def inspect_screen_elements(
                 error="Window is minimized (iconic)",
             )
 
-        # Compute screen-space client viewport for strict clipping
+        # Compute screen-space client viewport for root_target
         cr = wintypes.RECT()
-        user32.GetClientRect(target_hwnd, ctypes.byref(cr))
+        user32.GetClientRect(root_target, ctypes.byref(cr))
         pt_tl = wintypes.POINT(cr.left, cr.top)
-        user32.ClientToScreen(target_hwnd, ctypes.byref(pt_tl))
+        user32.ClientToScreen(root_target, ctypes.byref(pt_tl))
         pt_br = wintypes.POINT(cr.right, cr.bottom)
-        user32.ClientToScreen(target_hwnd, ctypes.byref(pt_br))
+        user32.ClientToScreen(root_target, ctypes.byref(pt_br))
 
         vp_left, vp_top = pt_tl.x, pt_tl.y
         vp_right, vp_bottom = pt_br.x, pt_br.y
@@ -356,14 +359,14 @@ def inspect_screen_elements(
             vp_left, vp_top, vp_right, vp_bottom = w_rect
 
         # Collect child HWNDs (for WinUI islands and Chromium bridges)
-        sub_hwnds = [target_hwnd]
+        sub_hwnds = [root_target, target_hwnd]
         def _enum_sub(ch, _):
             sub_hwnds.append(ch)
             return True
 
         WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
         try:
-            user32.EnumChildWindows(target_hwnd, WNDENUMPROC(_enum_sub), 0)
+            user32.EnumChildWindows(root_target, WNDENUMPROC(_enum_sub), 0)
         except Exception:
             pass
 
@@ -383,6 +386,8 @@ def inspect_screen_elements(
         true_cond = cui.CreateTrueCondition()
 
         try:
+            root_el = cui.ElementFromHandle(root_target)
+        except Exception:
             root_el = cui.ElementFromHandle(target_hwnd)
         except Exception as e:
             return ScreenSnapshot(
@@ -907,7 +912,7 @@ def verify_element_clickable(
 # REAL MOUSE/INPUT EXECUTION IS HARD-CODED TO FALSE.
 # Real input injection (SendInput, mouse_event, keybd_event) is strictly prohibited.
 # This flag blocks any real click execution at the lowest level, mirroring tools/messaging.py.
-REAL_CLICK_ENABLED: bool = True
+REAL_CLICK_ENABLED: bool = False
 
 
 @dataclass

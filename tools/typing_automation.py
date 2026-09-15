@@ -46,7 +46,7 @@ from tools.screen_inspector import (
 # REAL KEYBOARD INPUT DISPATCH IS HARD-CODED TO FALSE.
 # Physical keyboard event injection (SendInput, keybd_event) is strictly prohibited.
 # This flag blocks any real typing at the lowest level, mirroring tools/messaging.py and screen_inspector.py.
-REAL_TYPE_ENABLED: bool = True
+REAL_TYPE_ENABLED: bool = False
 
 # Maximum allowed characters staged in a single typing operation
 MAX_STAGED_TEXT_LENGTH: int = 500
