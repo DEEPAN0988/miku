@@ -9,6 +9,7 @@ ARCHITECTURAL CONSTRAINTS:
 """
 
 from dataclasses import dataclass
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 try:
@@ -103,12 +104,12 @@ class TreeInspector:
         self,
         name: str,
         control_type: Optional[str] = None,
+        timeout: float = 5.0,
+        poll_interval: float = 0.5,
     ) -> Dict[str, Any]:
         """
         Traverses the UI tree to find a control by its logical name or AutomationId.
-        Performs a case-insensitive partial substring match checking BOTH name and automation_id.
-        Returns a dictionary with exact bounding box coordinates and center point.
-        Raises ElementNotFoundError if the element is not found in the OS tree.
+        Includes an implicit auto-wait polling loop to handle OS render latencies.
         """
         if not name or not name.strip():
             raise ElementNotFoundError("Empty or invalid element name specified for search.")
@@ -116,44 +117,51 @@ class TreeInspector:
         target_lower = name.strip().lower()
         c_filter = control_type.lower().strip() if control_type else None
 
-        elements = self.inspect_tree()
+        start_time = time.time()
 
-        # Pass 1: Exact matches first
-        exact_matches = []
-        for el in elements:
-            if c_filter and el.control_type.lower() != c_filter:
-                continue
-            if (el.automation_id and el.automation_id.lower() == target_lower) or \
-               (el.name and el.name.lower() == target_lower):
-                exact_matches.append(el)
+        while True:
+            elements = self.inspect_tree()
 
-        if exact_matches:
-            for el in exact_matches:
-                if getattr(el, "is_visible", True):
-                    return el.to_dict()
-            return exact_matches[0].to_dict()
+            # Pass 1: Exact matches first
+            exact_matches = []
+            for el in elements:
+                if c_filter and el.control_type.lower() != c_filter:
+                    continue
+                if (el.automation_id and el.automation_id.lower() == target_lower) or \
+                   (el.name and el.name.lower() == target_lower):
+                    exact_matches.append(el)
 
-        # Pass 2: Case-insensitive partial substring match on BOTH name and automation_id
-        partial_matches = []
-        for el in elements:
-            if c_filter and el.control_type.lower() != c_filter:
-                continue
-            el_name = (el.name or "").lower()
-            el_auto_id = (el.automation_id or "").lower()
+            if exact_matches:
+                for el in exact_matches:
+                    if getattr(el, "is_visible", True):
+                        return el.to_dict()
+                return exact_matches[0].to_dict()
 
-            if target_lower in el_name or target_lower in el_auto_id:
-                partial_matches.append(el)
+            # Pass 2: Case-insensitive partial substring match
+            partial_matches = []
+            for el in elements:
+                if c_filter and el.control_type.lower() != c_filter:
+                    continue
+                el_name = (el.name or "").lower()
+                el_auto_id = (el.automation_id or "").lower()
 
-        if partial_matches:
-            # Return first visible match, or first match if visibility is unconstrained
-            for el in partial_matches:
-                if getattr(el, "is_visible", True):
-                    return el.to_dict()
-            return partial_matches[0].to_dict()
+                if target_lower in el_name or target_lower in el_auto_id:
+                    partial_matches.append(el)
 
-        # STRICT CONSTRAINT: Do NOT guess pixels. Throw ElementNotFoundError.
+            if partial_matches:
+                for el in partial_matches:
+                    if getattr(el, "is_visible", True):
+                        return el.to_dict()
+                return partial_matches[0].to_dict()
+
+            if (time.time() - start_time) >= timeout or self.mock_elements is not None:
+                break
+
+            time.sleep(poll_interval)
+
+        # STRICT CONSTRAINT: Do NOT guess pixels. Throw ElementNotFoundError after timeout.
         raise ElementNotFoundError(
-            f"Element '{name}' (control_type={control_type or 'Any'}) not found in OS UIAutomation accessibility tree."
+            f"Element '{name}' (control_type={control_type or 'Any'}) not found in OS UIAutomation accessibility tree within {timeout}s."
         )
 
     def read_element_text(self, target_name: str) -> Dict[str, Any]:

@@ -206,7 +206,13 @@ class TestTreeInspector(unittest.TestCase):
 
     def test_missing_element_throws(self):
         with self.assertRaises(ElementNotFoundError):
-            self.inspector.find_element_by_name("NonExistentButton")
+            self.inspector.find_element_by_name("NonExistentButton", timeout=0.05, poll_interval=0.01)
+
+    def test_implicit_auto_wait_polling(self):
+        # Verify custom timeout parameter accepted without error
+        res = self.inspector.find_element_by_name("Submit", timeout=1.0, poll_interval=0.01)
+        self.assertEqual(res["name"], "Submit")
+
 
 
 class TestSafeExecutor(unittest.TestCase):
