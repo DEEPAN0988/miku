@@ -23,13 +23,13 @@ class DeterministicCLI:
     def __init__(self):
         self.os_ctrl = OSController()
         # Strict syntax patterns
-        self.sys_pattern = re.compile(r"^sys\s+(kill|lock|boot)\s*(.*)$", re.IGNORECASE)
+        self.sys_pattern = re.compile(r"^sys\s+(kill|lock|boot|ps|info|screenshot)\s*(.*)$", re.IGNORECASE)
         self.open_pattern = re.compile(r"^open\s+(?:['\"](.+?)['\"]|([a-zA-Z0-9_\-\.\:\\]+))$", re.IGNORECASE)
         self.click_pattern = re.compile(r"^click\s+['\"]?(.+?)['\"]?$", re.IGNORECASE)
         self.type_pattern = re.compile(r"^type\s+['\"](.+?)['\"]\s+into\s+['\"]?(.+?)['\"]?$", re.IGNORECASE)
         self.read_pattern = re.compile(r"^read\s+['\"]?(.+?)['\"]?$", re.IGNORECASE)
 
-    def execute_sys_command(self, cmd_type: str, args: str) -> Dict[str, Any] if False else Any:
+    def execute_sys_command(self, cmd_type: str, args: str):
         """Routes direct OS commands."""
         args_clean = args.strip()
         if cmd_type == "kill":
@@ -38,6 +38,12 @@ class DeterministicCLI:
             result = self.os_ctrl.lock_workstation()
         elif cmd_type == "boot":
             result = self.os_ctrl.boot_workspace()
+        elif cmd_type == "ps":
+            result = self.os_ctrl.list_processes(args_clean)
+        elif cmd_type == "info":
+            result = self.os_ctrl.get_system_info()
+        elif cmd_type == "screenshot":
+            result = self.os_ctrl.take_screenshot(args_clean or "screenshot.png")
         else:
             result = {"status": "error", "msg": f"[ERROR] Unknown sys command: {cmd_type}"}
         print(result["msg"])
