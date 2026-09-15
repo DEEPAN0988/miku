@@ -260,7 +260,9 @@ def run_autonomous_task_loop(
         target_app_lower = intent["target_app"].lower()
         app_aliases = [target_app_lower]
         if "wuthering" in target_app_lower:
-            app_aliases.extend(["wuthering", "launcher_main", "kuro game", "kuro", "client-win64-shipping"])
+            app_aliases.extend(["wuthering", "launcher_main", "kuro game", "kuro", "client-win64-shipping", "launcher.exe", "wutheringwaves"])
+
+        EXCLUDED_PROCS = ("explorer.exe", "searchhost.exe", "cmd.exe", "powershell.exe", "udclientservice.exe")
 
         target_found_window = None
         if target_app_lower and snap.title not in ("Search", "Start"):
@@ -268,12 +270,24 @@ def run_autonomous_task_loop(
                 target_found_window = (snap.hwnd, snap.title)
 
         if not target_found_window and win32gui:
+            import win32process
             def _enum_win_cb(h, acc):
                 if win32gui.IsWindow(h):
                     t = win32gui.GetWindowText(h).lower()
                     if t and t not in ("search", "start", "program manager", "nahimic", "windows input experience"):
                         if any(alias in t for alias in app_aliases):
                             acc.append((h, win32gui.GetWindowText(h)))
+                    else:
+                        # Check window process name
+                        try:
+                            _, pid = win32process.GetWindowThreadProcessId(h)
+                            if pid > 0:
+                                import psutil
+                                p_name = psutil.Process(pid).name().lower()
+                                if any(alias in p_name for alias in app_aliases) and p_name not in EXCLUDED_PROCS:
+                                    acc.append((h, f"{p_name} (HWND {h})"))
+                        except Exception:
+                            pass
                 return True
             found_wins = []
             try:
@@ -283,9 +297,21 @@ def run_autonomous_task_loop(
             if found_wins:
                 target_found_window = found_wins[0]
 
+        # Check process fallback if app result was clicked or fallback launch executed
+        if not target_found_window and (app_result_clicked or step_count > 3):
+            try:
+                import psutil
+                for proc in psutil.process_iter(['pid', 'name']):
+                    p_name = proc.name().lower()
+                    if any(alias in p_name for alias in app_aliases) and p_name not in EXCLUDED_PROCS:
+                        target_found_window = (0, f"Process '{proc.name()}' (PID {proc.pid})")
+                        break
+            except Exception:
+                pass
+
         if target_found_window:
             w_hwnd, w_title = target_found_window
-            print(f"\n[GOAL ACHIEVED] Window '{w_title}' (HWND {w_hwnd}) matching '{intent['target_app']}' is open and active!")
+            print(f"\n[GOAL ACHIEVED] Target '{w_title}' matching '{intent['target_app']}' is running and verified!")
             trace.append({
                 "step": step_count,
                 "action": "verify_completion",
@@ -305,6 +331,11 @@ def run_autonomous_task_loop(
         # Dynamic Action Selection Logic:
         # Phase 1: Open Start Menu if not active
         if snap.title not in ("Search", "Start"):
+            if app_result_clicked:
+                print("  [*] App result already clicked; awaiting process/window initialization...")
+                time.sleep(1.5)
+                continue
+
             action_desc = "Open Windows Start Menu via Win Key"
             details = {"action": "dispatch_vk_key(VK_LWIN)", "foreground_window": snap.title}
 
