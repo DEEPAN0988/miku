@@ -76,17 +76,18 @@ class TestAppLauncherResilience(unittest.TestCase):
         # Simulate Tier 1 and Tier 2 both failing
         with patch("tools.app_launcher.resolve_app_path", return_value=("strict_admin_app", real_exe)):
             with patch("os.startfile", side_effect=err_740):
-                with patch("tools.app_launcher._verify_process_alive", return_value=False):
-                    with patch("tools.system_dispatcher.launch_elevated_app", return_value={
-                        "status": "SUCCESS",
-                        "mode": "TASK_SCHEDULER",
-                        "executed": True,
-                        "task_name": "Miku_Elevated_strict_admin_app",
-                    }) as mock_elevated:
-                        res = launch_app("strict_admin_app")
-                        self.assertEqual(res["status"], "SUCCESS")
-                        self.assertEqual(res["mode"], "TASK_SCHEDULER")
-                        mock_elevated.assert_called_once()
+                with patch("subprocess.Popen", side_effect=err_740):
+                    with patch("tools.app_launcher._verify_process_alive", return_value=False):
+                        with patch("tools.system_dispatcher.launch_elevated_app", return_value={
+                            "status": "SUCCESS",
+                            "mode": "TASK_SCHEDULER",
+                            "executed": True,
+                            "task_name": "Miku_Elevated_strict_admin_app",
+                        }) as mock_elevated:
+                            res = launch_app("strict_admin_app")
+                            self.assertEqual(res["status"], "SUCCESS")
+                            self.assertEqual(res["mode"], "TASK_SCHEDULER")
+                            mock_elevated.assert_called_once()
 
 
 if __name__ == "__main__":
