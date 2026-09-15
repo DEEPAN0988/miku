@@ -38,6 +38,10 @@ from tools.interactive_loop import run_autonomous_task_loop
 def check_and_elevate() -> bool:
     """Checks for Administrator privileges and requests elevation if necessary."""
     try:
+        if os.environ.get("MIKU_NO_ELEVATE") == "true":
+            print("[*] MIKU_NO_ELEVATE active. Continuing non-elevated.", flush=True)
+            return False
+
         if not ctypes.windll.shell32.IsUserAnAdmin():
             print("[*] Requesting Administrator Elevation (runas)...", flush=True)
             script_path = os.path.abspath(sys.argv[0])
