@@ -16,13 +16,9 @@ from __future__ import annotations
 import os
 
 # ==============================================================================
-# 1. Environment Setup (Must run before Miku tools are imported)
+# 1. Environment Setup
 # ==============================================================================
-os.environ["MIKU_LIVE_EXECUTION"] = "true"
-os.environ["MIKU_AUTONOMOUS_MODE"] = "true"
 
-# Explicitly unset OPENAI_API_KEY so system strictly verifies local offline readiness
-os.environ.pop("OPENAI_API_KEY", None)
 
 import ctypes
 from ctypes import wintypes
@@ -264,6 +260,10 @@ def test_5_keyboard_mouse_dispatch() -> Tuple[bool, float, str]:
 # ==============================================================================
 
 def main() -> int:
+    os.environ["MIKU_LIVE_EXECUTION"] = "true"
+    os.environ["MIKU_AUTONOMOUS_MODE"] = "true"
+    os.environ.pop("OPENAI_API_KEY", None)
+
     # ANSI color codes
     C_GREEN = "\033[92m"
     C_RED = "\033[91m"
@@ -328,5 +328,11 @@ def main() -> int:
     return 0 if all_passed else 1
 
 
+def run_diagnostics() -> bool:
+    return main() == 0
+
+
 if __name__ == "__main__":
     sys.exit(main())
+
+
