@@ -661,18 +661,40 @@ def dispatch_enter_key(hold_duration: float = 0.05) -> bool:
 
 def dispatch_uac_yes_confirmation() -> bool:
     """
-    Dispatches Left Arrow key (VK_LEFT, 0x25) followed by Enter key (VK_RETURN, 0x0D)
-    and Alt+Y shortcut to automatically confirm 'Yes' on Windows User Account Control (UAC) prompts.
+    Glides physical mouse cursor to 'Yes' option on UAC dialog card and dispatches click,
+    followed by Left Arrow (VK_LEFT, 0x25) + Enter (VK_RETURN, 0x0D) and Alt+Y shortcut.
     """
-    from tools.screen_inspector import _attach_thread_to_default_desktop
+    from tools.screen_inspector import _attach_thread_to_default_desktop, get_current_cursor_pos, human_mouse_move
     _attach_thread_to_default_desktop()
-    print("[*] Dispatching UAC 'Yes' confirmation (Left Arrow + Enter / Alt+Y)...", flush=True)
-    # 1. Shift focus from default 'No' to 'Yes' button and press Enter
+
+    # 1. Calculate physical screen bounds and UAC 'Yes' button coordinates
+    sw = user32.GetSystemMetrics(0)
+    sh = user32.GetSystemMetrics(1)
+    yes_x = int(sw * 0.461)
+    yes_y = int(sh * 0.556)
+
+    cur_x, cur_y = get_current_cursor_pos()
+    print(f"[*] Gliding mouse cursor from ({cur_x}, {cur_y}) to UAC 'Yes' option at ({yes_x}, {yes_y})...", flush=True)
+
+    # 2. Smooth minimum-jerk Bézier physical mouse glide to 'Yes' button
+    try:
+        human_mouse_move(cur_x, cur_y, yes_x, yes_y, duration=0.25)
+        time.sleep(0.04)
+        user32.mouse_event(0x0002, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTDOWN
+        time.sleep(0.03)
+        user32.mouse_event(0x0004, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTUP
+    except Exception as exc:
+        print(f"[!] Mouse glide exception: {exc}", flush=True)
+
+    time.sleep(0.08)
+
+    # 3. Shift focus from default 'No' to 'Yes' button via Left Arrow and press Enter
     dispatch_vk_key(0x25, hold_duration=0.06)  # VK_LEFT
     time.sleep(0.08)
     dispatch_vk_key(0x0D, hold_duration=0.08)  # VK_RETURN
     time.sleep(0.12)
-    # 2. Alt+Y accelerator backup (VK_MENU=0x12, Y=0x59)
+
+    # 4. Alt+Y accelerator backup (VK_MENU=0x12, Y=0x59)
     try:
         scan_alt = user32.MapVirtualKeyW(0x12, 0)
         scan_y = user32.MapVirtualKeyW(0x59, 0)
