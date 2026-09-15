@@ -670,8 +670,8 @@ def dispatch_uac_yes_confirmation() -> bool:
     # 1. Calculate physical screen bounds and UAC 'Yes' button coordinates
     sw = user32.GetSystemMetrics(0)
     sh = user32.GetSystemMetrics(1)
-    yes_x = int(sw * 0.461)
-    yes_y = int(sh * 0.556)
+    yes_x = int(sw * 0.455)
+    yes_y = int(sh * 0.605)
 
     cur_x, cur_y = get_current_cursor_pos()
     print(f"[*] Gliding mouse cursor from ({cur_x}, {cur_y}) to UAC 'Yes' option at ({yes_x}, {yes_y})...", flush=True)

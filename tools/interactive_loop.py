@@ -332,11 +332,12 @@ def run_autonomous_task_loop(
         # Dynamic Action Selection Logic:
         # Phase 1: Open Start Menu if not active
         if snap.title not in ("Search", "Start"):
-            if app_result_clicked:
-                print("  [*] App result already clicked; attempting UAC 'Yes' confirmation and awaiting process initialization...")
+            if app_result_clicked or step_count == 1:
+                print("  [*] Checking active screen for UAC prompt; gliding mouse cursor to UAC 'Yes' option...")
                 dispatch_uac_yes_confirmation()
-                time.sleep(1.5)
-                continue
+                if app_result_clicked:
+                    time.sleep(1.5)
+                    continue
 
             action_desc = "Open Windows Start Menu via Win Key"
             details = {"action": "dispatch_vk_key(VK_LWIN)", "foreground_window": snap.title}
