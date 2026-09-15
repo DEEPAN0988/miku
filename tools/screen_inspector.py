@@ -1283,10 +1283,27 @@ def dispatch_real_click(
         )
 
     # 5. Final Ground-Truth Focus & Window State Re-Verification immediately prior to physical input
+    root_target = user32.GetAncestor(target_hwnd, 2) or target_hwnd
+    if user32.IsWindow(root_target):
+        try:
+            user32.SetForegroundWindow(root_target)
+            time.sleep(0.05)
+        except Exception:
+            pass
+
     fg_hwnd = user32.GetForegroundWindow()
     root_fg = user32.GetAncestor(fg_hwnd, 2) or fg_hwnd
-    root_target = user32.GetAncestor(target_hwnd, 2) or target_hwnd
-    if root_fg != root_target and fg_hwnd != target_hwnd:
+
+    fg_class = win32gui.GetClassName(root_fg) if win32gui else ""
+    target_class = win32gui.GetClassName(root_target) if win32gui else ""
+
+    is_fg = (
+        root_fg == root_target
+        or fg_hwnd == target_hwnd
+        or (fg_class == "Windows.UI.Core.CoreWindow" and target_class == "Windows.UI.Core.CoreWindow")
+    )
+
+    if not is_fg:
         return ClickDispatchResult(
             success=False,
             status="ABORT_NOT_FOREGROUND",
