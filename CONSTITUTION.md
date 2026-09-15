@@ -470,3 +470,50 @@ Before creating a new utility, service, model, database helper, API client, or m
 1. Inspect the existing codebase.
 2. Check if a component already exists.
 3. Extend or refactor existing components rather than duplicating them.
+
+---
+
+### 25. NO EXTERNAL AI APIS OR PRE-TRAINED FOUNDATION MODELS WITHOUT EXPLICIT AUTHORIZATION
+
+**This rule is in addition to §3 (No Fake AI) and §6 (From-Scratch Means From-Scratch).**
+
+#### 25.1 — Hard Ban (requires explicit user authorization to lift)
+
+The following are PROHIBITED by default in every session:
+
+- Calling any external cloud AI API: OpenAI, Anthropic, Cohere, Mistral, Google Gemini, Groq, Replicate, Together AI, Fireworks, HuggingFace Inference API, or any equivalent.
+- Importing `openai`, `anthropic`, `langchain`, `litellm`, `guidance`, or `dspy` in any production or training file.
+- Loading a pre-trained foundation model from HuggingFace (e.g. `AutoModelForCausalLM.from_pretrained("meta-llama/...")`) and presenting it as this project's own trained model.
+- Creating a hidden fallback that silently routes to a cloud API when a local model fails.
+- Using `transformers.pipeline(...)` as the project's reasoning or generation engine.
+
+#### 25.2 — What IS Permitted Without Authorization
+
+- PyTorch, NumPy, SciPy — infrastructure and numerical computation only.
+- HuggingFace `tokenizers` and `datasets` — data processing utilities only.
+- `vikhyatk/moondream2` loaded in `tools/local_vision.py` — spatial grounding only (visual pixel coordinate prediction, NOT language reasoning).
+- Any model checkpoint under `checkpoints/` produced by this project's own `train/train_sft.py` or `train/pretrain.py` pipelines.
+- External API calls inside test/evaluation scripts **only** when `MIKU_EVAL_EXTERNAL=true` is explicitly set in the environment.
+
+> **NOTE — Ollama / llama3.2-vision**: This is a Meta pre-trained model. It is NOT exempt from this rule.
+> The current Ollama bridge in `miku.py` and `tools/orchestrator.py` is a **[SCAFFOLD]** — a temporary
+> placeholder until Miku's own trained model checkpoint is capable of handling computer-use decisions.
+> It must be clearly labeled `[SCAFFOLD]` in all code comments and terminal output.
+> No capability driven by it may be claimed as Miku's own trained intelligence.
+
+#### 25.3 — Enforcement Protocol for Agents
+
+Before writing any code that touches model loading, AI HTTP requests, or `transformers`/`diffusers` imports:
+
+1. Ask: "Is this an external cloud API call?" → If yes: STOP and ask for authorization.
+2. Ask: "Is this a pre-trained model not produced by this project?" → If yes: STOP and ask for authorization.
+3. Ask: "Could this be disguising an external API as local intelligence?" → If yes: STOP. This is a §3 violation.
+4. Ask: "Does a local checkpoint under `checkpoints/` already exist?" → If yes: always prefer it.
+
+#### 25.4 — When a User Requests a Capability That Needs a Better Model
+
+1. Label the gap honestly: `[NOT YET IMPLEMENTED — requires further Miku training]`
+2. Propose the training path: "We can train Miku on this domain using `train/train_sft.py`"
+3. Do NOT silently substitute an external API or pre-trained model as a workaround.
+
+*This section was added 2026-09-15.*

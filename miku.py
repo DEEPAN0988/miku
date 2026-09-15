@@ -4,10 +4,8 @@ miku.py — Interactive OS Agent Command-Line Interface (REPL)
 Main interactive entry point for the Miku OS Agent:
   - Uninhibited full autonomous live control: Bézier cursor glides and humanized typing.
   - Interactive REPL loop prompting with 'Miku > '.
-  - 100% Native In-Process VLM: Powered by PyTorch & Transformers (vikhyatk/moondream2)
-    with dynamic CUDA/bfloat16 acceleration for direct visual element grounding and clicking.
-  - Multi-Step Computer Use: Seamless routing to live Astra API (when OPENAI_API_KEY is present)
-    or local Ollama Vision bridge (llama3.2-vision) with zero fake mocks.
+  - Native Inference: Miku v0.3 loaded directly via PyTorch (no pre-trained models)
+  - Vision Encoder: [NOT YET TRAINED] using Win32 structured text parsing
 """
 
 from __future__ import annotations
@@ -60,8 +58,8 @@ BANNER = r"""
  |_|  |_|_____|_|\_\\___/    Native In-Process VLM + Multimodal Bridge
 ===============================================================================
  [*] Win32 Humanizer     : ACTIVE (Cubic Bézier Glides & Micro-Delayed Typing)
- [*] In-Process VLM      : ACTIVE (Moondream2 / PyTorch Native Spatial Grounding)
- [*] Local Vision Bridge : Ollama (llama3.2-vision) + OpenAI Astra
+ [*] Native Inference    : Miku v0.3 loaded directly via PyTorch (no pre-trained models)
+ [*] Vision Encoder      : [NOT YET TRAINED] using Win32 structured text parsing
  [*] Autonomous Mode     : UNLOCKED (Live Non-Blocking OS Control)
 ===============================================================================
 """
@@ -73,18 +71,22 @@ def print_banner() -> None:
     model = os.environ.get("ASTRA_MODEL", "openai/gpt-6-astra")
     dev, dtype = get_acceleration_device_and_dtype()
 
-    if HAS_VISION_DEPS:
-        print(f"[+] In-Process VLM     : vikhyatk/moondream2 (device={dev}, dtype={dtype})", flush=True)
-    else:
-        print("[!] In-Process VLM     : Dependencies missing. Run: pip install torch transformers pillow", flush=True)
+    print(" [*] Local Inference     : [ACTIVE] Miku v0.3 (own checkpoint, step 98458)", flush=True)
+    print(" [*] Vision Encoder      : [NOT YET TRAINED] Win32 structured text fallback", flush=True)
 
-    if has_api_key:
-        print(f"[+] Cloud Endpoint     : {model} (Live API Key Detected)", flush=True)
+    # Eagerly load & cache Miku model at startup to avoid cold-start on first command
+    from tools.miku_inference import load_miku_model, get_model_info
+    info = get_model_info()
+    if info.get("checkpoint_available"):
+        print(" [*] Loading Miku model (one-time startup)...", flush=True)
+        try:
+            _, _, dev = load_miku_model()
+            print(f" [+] Model ready on {dev}.", flush=True)
+        except Exception as e:
+            print(f" [!] Model load failed: {e}", flush=True)
     else:
-        ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-        ollama_model = os.environ.get("OLLAMA_VISION_MODEL", "llama3.2-vision")
-        print(f"[*] Local Endpoint     : Ollama {ollama_model} @ {ollama_host}", flush=True)
-        print("    Tip: Use '/key <YOUR_API_KEY>' to connect directly to cloud Astra API.", flush=True)
+        print("[!] [WARNING] Miku checkpoint not found! Run train/train_sft.py first.", flush=True)
+
     print("\nType your command below, '/help' for commands, or 'exit' / 'quit' to quit.\n", flush=True)
 
 
@@ -99,7 +101,8 @@ def print_help() -> None:
     print("  /vision <element>   Explicit in-process VLM visual grounding & click", flush=True)
     print("  /key <api_key>      Set or inspect OPENAI_API_KEY in real time", flush=True)
     print("  /model <name>       Set target vision model (default: openai/gpt-6-astra)", flush=True)
-    print("  /ollama <host>      Set local Ollama host (default: http://localhost:11434)", flush=True)
+    print("", flush=True)
+    print("  /check              Test Miku Inference health", flush=True)
     print("  /status             Show system status, VLM hardware acceleration, & humanizer", flush=True)
     print("  /clear              Clear the console screen", flush=True)
     print("  exit / quit         Exit the Miku REPL session", flush=True)
@@ -109,8 +112,6 @@ def print_help() -> None:
 def print_status() -> None:
     has_key = bool(os.environ.get("OPENAI_API_KEY"))
     model = os.environ.get("ASTRA_MODEL", "openai/gpt-6-astra")
-    ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-    ollama_model = os.environ.get("OLLAMA_VISION_MODEL", "llama3.2-vision")
     cur_pos = screen_inspector.get_current_cursor_pos()
     dev, dtype = get_acceleration_device_and_dtype()
 
@@ -123,9 +124,8 @@ def print_status() -> None:
     print(f"  Live Execution      : {os.environ.get('MIKU_LIVE_EXECUTION')}", flush=True)
     print(f"  In-Process VLM Deps : {'AVAILABLE' if HAS_VISION_DEPS else 'MISSING'}", flush=True)
     print(f"  VLM Acceleration    : Device={dev}, DType={dtype}", flush=True)
-    print(f"  Local Ollama Host   : {ollama_host} (Model: {ollama_model})", flush=True)
     print(f"  Cloud Vision Model  : {model}", flush=True)
-    print(f"  API Key Configured  : {'YES' if has_key else 'NO (Local Ollama bridge active)'}", flush=True)
+    print(f"  API Key Configured  : {'YES' if has_key else 'NO (Miku inference active)'}", flush=True)
     print("=" * 60, flush=True)
 
 
@@ -176,16 +176,7 @@ def repl() -> None:
                 print(f"[*] Current model: '{curr_model}'. Usage: /model <model_name>")
             continue
 
-        if prompt_input.startswith("/ollama"):
-            parts = prompt_input.split(maxsplit=1)
-            if len(parts) > 1:
-                new_host = parts[1].strip()
-                os.environ["OLLAMA_HOST"] = new_host
-                print(f"[+] Ollama host set to: '{new_host}'")
-            else:
-                curr_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-                print(f"[*] Current Ollama host: '{curr_host}'. Usage: /ollama <url>")
-            continue
+
 
         if prompt_input.startswith("/vision"):
             parts = prompt_input.split(maxsplit=1)
@@ -215,6 +206,19 @@ def repl() -> None:
             print_help()
             continue
 
+        if prompt_input.startswith("/check"):
+            from tools.miku_inference import get_model_info
+            info = get_model_info()
+            print("[MIKU SYSTEM HEALTH]")
+            print(f"- Checkpoint Available: {info.get('checkpoint_available')}")
+            print(f"- Checkpoint Path:      {info.get('checkpoint_path')}")
+            print(f"- Weights Loaded:       {info.get('loaded')}")
+            if info.get("loaded"):
+                print(f"- Device:               {info.get('device')}")
+                print(f"- Parameter Count:      {info.get('params')}")
+                print(f"- Config:               {info.get('config')}")
+            continue
+
         # ----------------------------------------------------------------------
         # Direct Natural Language Ground & Click Dispatch via In-Process VLM
         # ----------------------------------------------------------------------
@@ -232,7 +236,7 @@ def repl() -> None:
             continue
 
         # ----------------------------------------------------------------------
-        # Multi-Step Computer Use Agent Loop Dispatch (Cloud Astra or Local Ollama)
+        # Multi-Step Computer Use Agent Loop Dispatch (Cloud Astra or Miku Inference)
         # ----------------------------------------------------------------------
         print(f"\n[*] [TASK DISPATCHED] Objective: \"{prompt_input}\"", flush=True)
         t_start = time.perf_counter()
@@ -241,36 +245,137 @@ def repl() -> None:
         if has_api_key:
             model = os.environ.get("ASTRA_MODEL", "openai/gpt-6-astra")
             client = AstraVisionClient(model=model)
+            try:
+                res: ComputerUseTaskResult = run_computer_use_task(
+                    objective=prompt_input,
+                    client=client,
+                    real_execution=True,
+                    delay_between_steps=0.25,
+                )
+                elapsed = time.perf_counter() - t_start
+                print(f"\n[+] [TASK COMPLETED] Duration: {elapsed:.2f}s | Steps: {res.total_steps} | Status: {res.final_status}", flush=True)
+                if res.output:
+                    print(f"    Summary: {res.output}", flush=True)
+                if res.error:
+                    print(f"    [!] Details: {res.error}", flush=True)
+            except KeyboardInterrupt:
+                print("\n[!] [TASK ABORTED] Execution stopped by user via CTRL+C. Control returned to console.", flush=True)
+            except Exception as exc:
+                print(f"\n[!] [TASK ERROR] {exc}", flush=True)
         else:
-            ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
-            ollama_model = os.environ.get("OLLAMA_VISION_MODEL", "llama3.2-vision")
-            client = AstraVisionClient(
-                model=ollama_model,
-                ollama_host=ollama_host,
-                ollama_model=ollama_model,
-            )
+            # 100% Native Real-Time Motor Dispatch
+            # -------------------------------------------------------------------
+            # Detect quoted multi-command sequences like:
+            #   "open chrome", "click start", "type hello world", "close"
+            # Split into individual sub-commands and execute each in turn.
+            # -------------------------------------------------------------------
+            _quoted_cmds = re.findall(r'"([^"]+)"', prompt_input)
+            if len(_quoted_cmds) >= 2:
+                _sub_commands = _quoted_cmds
+            else:
+                _sub_commands = [prompt_input]  # treat as single command
 
-        try:
-            res: ComputerUseTaskResult = run_computer_use_task(
-                objective=prompt_input,
-                client=client,
-                real_execution=True,
-                delay_between_steps=0.25,
-            )
-            elapsed = time.perf_counter() - t_start
-            print(f"\n[+] [TASK COMPLETED] Duration: {elapsed:.2f}s | Steps: {res.total_steps} | Status: {res.final_status}", flush=True)
-            if res.output:
-                print(f"    Summary: {res.output}", flush=True)
-            if res.error:
-                print(f"    [!] Details: {res.error}", flush=True)
-        except KeyboardInterrupt:
-            print("\n[!] [TASK ABORTED] Execution stopped by user via CTRL+C. Control returned to console.", flush=True)
-        except ConnectionError as conn_exc:
-            print(f"\n[!] [CONNECTION ERROR] {conn_exc}", flush=True)
-        except Exception as exc:
-            print(f"\n[!] [TASK ERROR] {exc}", flush=True)
+            print(f"[*] [MIKU NATIVE INFERENCE] Executing {len(_sub_commands)} command(s)...", flush=True)
+            from tools.miku_inference import predict_action, get_screen_state_text
+            from tools.screen_inspector import find_element_bounds, human_mouse_move, dispatch_real_click
+            from tools.typing_automation import dispatch_human_keystrokes
+
+            def _dispatch_native_action(action_res: dict, step_label: str) -> None:
+                """Dispatch a single parsed action dict from Miku's native inference."""
+                action_type = action_res.get("action", "")
+                print(f"[*] [MODEL OUTPUT] {action_res}", flush=True)
+
+                if action_type == "click":
+                    target = action_res.get("target", "")
+                    if target:
+                        print(f"[*] [UI GROUNDING] Searching for '{target}' in accessibility tree...", flush=True)
+                        bounds_info = find_element_bounds(target)
+                        if bounds_info:
+                            rect, center = bounds_info
+                            cx, cy = center
+                            print(f"[+] [FOUND] '{target}' at ({cx}, {cy}). Dispatching motor commands.", flush=True)
+                            human_mouse_move(cx, cy)
+                            dispatch_real_click("left")
+                        else:
+                            print(f"[!] [UI GROUNDING FAILED] Could not locate '{target}'.", flush=True)
+
+                elif action_type == "type":
+                    text_to_type = action_res.get("text", "")
+                    if text_to_type:
+                        print(f"[*] [MOTOR DISPATCH] Typing '{text_to_type}'...", flush=True)
+                        dispatch_human_keystrokes(text_to_type)
+
+                elif action_type == "launch":
+                    target = action_res.get("target", "")
+                    if target:
+                        print(f"[*] [LAUNCH] Opening '{target}' via ShellExecuteW...", flush=True)
+                        try:
+                            ctypes.windll.shell32.ShellExecuteW(None, "open", target, None, None, 1)
+                            print(f"[+] [LAUNCH OK] '{target}' dispatched.", flush=True)
+                        except Exception as launch_err:
+                            print(f"[!] ShellExecute failed ({launch_err}), trying Start Menu search...", flush=True)
+                            _u32 = ctypes.windll.user32
+                            _u32.keybd_event(0x5B, 0, 0, 0)
+                            _u32.keybd_event(0x5B, 0, 2, 0)
+                            time.sleep(0.4)
+                            dispatch_human_keystrokes(target)
+                            time.sleep(0.3)
+                            _u32.keybd_event(0x0D, 0, 0, 0)
+                            _u32.keybd_event(0x0D, 0, 2, 0)
+
+                elif action_type == "press_key":
+                    key = action_res.get("key", "")
+                    if key:
+                        print(f"[*] [KEY DISPATCH] Pressing '{key}'...", flush=True)
+                        _KEY_VK = {
+                            "win": 0x5B, "alt": 0x12, "ctrl": 0x11, "shift": 0x10,
+                            "enter": 0x0D, "return": 0x0D, "tab": 0x09, "escape": 0x1B,
+                            "esc": 0x1B, "space": 0x20, "backspace": 0x08, "delete": 0x2E,
+                            "up": 0x26, "down": 0x28, "left": 0x25, "right": 0x27,
+                            "f4": 0x73, "f5": 0x74,
+                        }
+                        _parts = [p.strip() for p in key.lower().split("+")]
+                        _mods = [p for p in _parts[:-1] if p in _KEY_VK]
+                        _main_key = _parts[-1]
+                        _u32 = ctypes.windll.user32
+                        for mod in _mods:
+                            _u32.keybd_event(_KEY_VK[mod], 0, 0, 0)
+                        _vk = _KEY_VK.get(_main_key, ord(_main_key.upper()[0]) if len(_main_key) == 1 else 0)
+                        if _vk:
+                            _u32.keybd_event(_vk, 0, 0, 0)
+                            _u32.keybd_event(_vk, 0, 2, 0)
+                        for mod in reversed(_mods):
+                            _u32.keybd_event(_KEY_VK[mod], 0, 2, 0)
+
+                elif action_type == "task":
+                    # "task" means the local parser couldn't map this command to a
+                    # concrete action.  Without an API key we cannot escalate to the
+                    # cloud agent, so report the ambiguity clearly.
+                    print(
+                        f"[!] [TASK AMBIGUOUS] Could not map '{step_label}' to a concrete action. "
+                        "Set OPENAI_API_KEY to use the cloud vision agent for complex tasks.",
+                        flush=True,
+                    )
+
+                else:
+                    print(f"[!] [UNHANDLED ACTION] {action_res}", flush=True)
+
+            try:
+                screen_state = get_screen_state_text()
+                for _i, _sub_cmd in enumerate(_sub_commands, 1):
+                    if len(_sub_commands) > 1:
+                        print(f"[*] [STEP {_i}/{len(_sub_commands)}] '{_sub_cmd}'", flush=True)
+                    _action_res = predict_action(f"Objective: {_sub_cmd}\nScreen State: {screen_state}")
+                    _dispatch_native_action(_action_res, _sub_cmd)
+                    if _i < len(_sub_commands):
+                        time.sleep(0.4)  # brief pause between steps
+            except KeyboardInterrupt:
+                print("\n[!] [TASK ABORTED] Execution stopped by user via CTRL+C. Control returned to console.", flush=True)
+            except Exception as exc:
+                print(f"\n[!] [TASK ERROR] {exc}", flush=True)
 
         print("-" * 75, flush=True)
+
 
 
 if __name__ == "__main__":

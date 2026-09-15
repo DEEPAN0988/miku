@@ -459,7 +459,7 @@ class AstraVisionClient:
         """
         Dispatches multimodal vision request to model endpoint.
         Uses api_runner if provided, calls OpenAI if api_key is configured,
-        otherwise seamlessly routes through the local Ollama vision bridge (llama3.2-vision).
+        otherwise seamlessly routes through the local Miku inference engine (text-only).
         """
         payload = self.build_vision_payload(query, base64_image_url, system_prompt=system_prompt, history=history)
         if self.api_runner is not None:
@@ -478,14 +478,13 @@ class AstraVisionClient:
                 data = json.loads(resp.read().decode("utf-8"))
                 res = data["choices"][0]["message"]["content"]
         else:
-            # Offline / local execution bridge: route to local Ollama server
-            res = query_ollama_vision(
-                prompt=query,
-                base64_image_url=base64_image_url,
-                host=self.ollama_host,
-                model=self.ollama_model,
-                system_prompt=system_prompt,
-                history=history,
+            # Offline / local execution bridge: route to Miku's native inference engine
+            from tools.miku_inference import generate_action_json, get_screen_state_text
+            screen_state = get_screen_state_text()
+            res = generate_action_json(
+                objective=query,
+                screen_state=screen_state,
+                action_history=history,
             )
 
         # Physical visual glide preview during live execution
@@ -511,102 +510,6 @@ class AstraVisionClient:
             txt = action_dict.get("text", "")
             if txt:
                 dispatch_typing_payload(txt, min_delay_sec=0.015, max_delay_sec=0.035)
-
-
-def query_ollama_vision(
-    prompt: str,
-    base64_image_url: str,
-    host: str = "http://localhost:11434",
-    model: str = "llama3.2-vision",
-    system_prompt: Optional[str] = None,
-    history: Optional[List[Dict[str, Any]]] = None,
-    timeout_sec: float = 30.0,
-) -> str:
-    """
-    Local Ollama Vision Client Bridge using native HTTP requests (requests / httpx).
-    Sends the base64 desktop screenshot and objective to the local model (default: llama3.2-vision).
-    Strictly enforces Miku's standard JSON action schema:
-      {"action": "click", "x": <int>, "y": <int>}
-      {"action": "double_click", "x": <int>, "y": <int>}
-      {"action": "type", "text": "<str>"}
-      {"action": "press_key", "key": "<str>"}
-      {"action": "wait", "seconds": <float>}
-      {"action": "terminate", "reason": "<str>"}
-    If local Ollama server is offline or unreachable, catches connection error and prints:
-      [!] Local Ollama server not found on port 11434. Please start Ollama.
-    """
-    raw_b64 = base64_image_url
-    if "," in raw_b64 and raw_b64.startswith("data:"):
-        raw_b64 = raw_b64.split(",", 1)[1]
-
-    default_sys_msg = (
-        "You are Miku OS Vision Navigation & Computer Use Engine powered by llama3.2-vision.\n"
-        "Given the user's objective, desktop screenshot, and action history, determine the next action.\n"
-        "Respond ONLY with a valid JSON object matching exactly one of these schemas:\n"
-        '  {"action": "click", "x": <int>, "y": <int>}\n'
-        '  {"action": "double_click", "x": <int>, "y": <int>}\n'
-        '  {"action": "type", "text": "<str>"}\n'
-        '  {"action": "press_key", "key": "<str>"}\n'
-        '  {"action": "wait", "seconds": <float>}\n'
-        '  {"action": "terminate", "reason": "<str>"}\n'
-        "Rules:\n"
-        "1. Coordinates x and y must be integers corresponding to desktop pixel coordinates.\n"
-        "2. For press_key, use standard key names (e.g. 'enter', 'win', 'esc', 'tab', 'backspace', 'space').\n"
-        "3. Use terminate when the objective is fully achieved or cannot proceed.\n"
-        "4. Return ONLY the JSON object, with no markdown or explanatory commentary."
-    )
-    sys_msg = system_prompt or default_sys_msg
-
-    user_text = prompt
-    if history:
-        user_text += "\n\nHistory of previously executed actions:"
-        for i, h in enumerate(history, 1):
-            act_str = json.dumps(h.get("action", h))
-            status = h.get("status", "SUCCESS" if h.get("success") else "FAILED")
-            user_text += f"\n  Step {i}: {act_str} -> {status}"
-
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": sys_msg},
-            {
-                "role": "user",
-                "content": user_text,
-                "images": [raw_b64],
-            },
-        ],
-        "format": "json",
-        "stream": False,
-        "options": {
-            "temperature": 0.0,
-        },
-    }
-
-    clean_host = host.rstrip("/")
-    endpoint = f"{clean_host}/api/chat"
-    port = "11434"
-    if ":" in clean_host:
-        port = clean_host.rsplit(":", 1)[-1].split("/")[0]
-
-    try:
-        import requests
-        resp = requests.post(endpoint, json=payload, timeout=timeout_sec)
-        resp.raise_for_status()
-        data = resp.json()
-        return data.get("message", {}).get("content", "")
-    except Exception as exc:
-        err_type = type(exc).__name__
-        is_conn_error = (
-            "Connection" in err_type
-            or "Connect" in err_type
-            or "Timeout" in err_type
-            or isinstance(exc, (urllib.error.URLError, ConnectionRefusedError, OSError))
-        )
-        if is_conn_error:
-            warning_msg = f"[!] Local Ollama server not found on port {port}. Please start Ollama."
-            print(f"\n{warning_msg}\n", flush=True)
-            raise ConnectionError(warning_msg) from exc
-        raise
 
 
 SUPPORTED_ASTRA_ACTIONS = (
