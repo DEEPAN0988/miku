@@ -29,7 +29,7 @@ from safe_executor import ActionDispatch, UnauthorizedActionError
 from ui_inspector import ElementNotFoundError, TreeInspector
 from agent_loop import AgentLoop, PipelineHaltedError, TaskSpec
 from visual_highlighter import TargetHighlighter
-from cli_macro_engine import RegexCommandParser
+from cli_macro_engine import DeterministicCLI, RegexCommandParser
 
 
 class TestOrchestratorConfig(unittest.TestCase):
@@ -337,41 +337,53 @@ class TestAgentLoop(unittest.TestCase):
 
 
 
-class TestRegexCommandParser(unittest.TestCase):
-    """Test RegexCommandParser deterministic CLI parsing."""
+class TestDeterministicCLI(unittest.TestCase):
+    """Test DeterministicCLI parsing and OSController routing."""
 
     def setUp(self):
-        self.parser = RegexCommandParser()
+        self.cli = DeterministicCLI()
 
     def test_click_command_parsing(self):
-        task = self.parser.parse("click Start")
+        task = self.cli.parse_ui_command("click Start")
         self.assertIsNotNone(task)
         self.assertEqual(task.action_type, "click")
         self.assertEqual(task.target_name, "Start")
 
     def test_type_command_parsing(self):
-        task = self.parser.parse('type "Notepad" into "Search"')
+        task = self.cli.parse_ui_command('type "Notepad" into "Search"')
         self.assertIsNotNone(task)
         self.assertEqual(task.action_type, "type")
         self.assertEqual(task.target_name, "Search")
         self.assertEqual(task.payload, "Notepad")
 
     def test_read_command_parsing(self):
-        task = self.parser.parse("read Screen")
+        task = self.cli.parse_ui_command("read Screen")
         self.assertIsNotNone(task)
         self.assertEqual(task.action_type, "read_screen_text")
         self.assertEqual(task.target_name, "Screen")
 
     def test_open_command_parsing(self):
-        task = self.parser.parse('open "code"')
+        task = self.cli.parse_ui_command('open "code"')
         self.assertIsNotNone(task)
         self.assertEqual(task.action_type, "open")
         self.assertEqual(task.target_name, "code")
 
+    def test_sys_command_matching(self):
+        m1 = self.cli.sys_pattern.match("sys kill node")
+        self.assertIsNotNone(m1)
+        self.assertEqual(m1.group(1).lower(), "kill")
+        self.assertEqual(m1.group(2).strip(), "node")
+
+        m2 = self.cli.sys_pattern.match("sys lock")
+        self.assertIsNotNone(m2)
+        self.assertEqual(m2.group(1).lower(), "lock")
+
+        m3 = self.cli.sys_pattern.match("sys boot")
+        self.assertIsNotNone(m3)
+        self.assertEqual(m3.group(1).lower(), "boot")
+
     def test_invalid_syntax_returns_none(self):
-        self.assertIsNone(self.parser.parse("open Notepad and type hello"))
-
-
+        self.assertIsNone(self.cli.parse_ui_command("open Notepad and type hello"))
 
 
 if __name__ == "__main__":
