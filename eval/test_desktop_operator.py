@@ -9,8 +9,15 @@ Verifies:
 3. Capability (B) Simulation: Start Menu search and click flow in dry-run mode (zero physical input).
 """
 
+import sys
+from pathlib import Path
+
+# Guarantee workspace root is in sys.path when script is executed directly
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import unittest
 from tools.screen_inspector import REAL_CLICK_ENABLED, inspect_screen_elements, UIElement, ScreenSnapshot
+
 from tools.typing_automation import REAL_TYPE_ENABLED
 from tools.desktop_operator import (
     find_search_box_element,
