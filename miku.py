@@ -263,112 +263,12 @@ def repl() -> None:
             except Exception as exc:
                 print(f"\n[!] [TASK ERROR] {exc}", flush=True)
         else:
-            # 100% Native Real-Time Motor Dispatch
+            # 100% Native Real-Time Autonomous Interactive Loop Dispatch
             # -------------------------------------------------------------------
-            # Detect quoted multi-command sequences like:
-            #   "open chrome", "click start", "type hello world", "close"
-            # Split into individual sub-commands and execute each in turn.
-            # -------------------------------------------------------------------
-            _quoted_cmds = re.findall(r'"([^"]+)"', prompt_input)
-            if len(_quoted_cmds) >= 2:
-                _sub_commands = _quoted_cmds
-            else:
-                _sub_commands = [prompt_input]  # treat as single command
-
-            print(f"[*] [MIKU NATIVE INFERENCE] Executing {len(_sub_commands)} command(s)...", flush=True)
-            from tools.miku_inference import predict_action, get_screen_state_text
-            from tools.screen_inspector import find_element_bounds, human_mouse_move, dispatch_real_click
-            from tools.typing_automation import dispatch_human_keystrokes
-
-            def _dispatch_native_action(action_res: dict, step_label: str) -> None:
-                """Dispatch a single parsed action dict from Miku's native inference."""
-                action_type = action_res.get("action", "")
-                print(f"[*] [MODEL OUTPUT] {action_res}", flush=True)
-
-                if action_type == "click":
-                    target = action_res.get("target", "")
-                    if target:
-                        print(f"[*] [UI GROUNDING] Searching for '{target}' in accessibility tree...", flush=True)
-                        bounds_info = find_element_bounds(target)
-                        if bounds_info:
-                            rect, center = bounds_info
-                            cx, cy = center
-                            print(f"[+] [FOUND] '{target}' at ({cx}, {cy}). Dispatching motor commands.", flush=True)
-                            human_mouse_move(cx, cy)
-                            dispatch_real_click("left")
-                        else:
-                            print(f"[!] [UI GROUNDING FAILED] Could not locate '{target}'.", flush=True)
-
-                elif action_type == "type":
-                    text_to_type = action_res.get("text", "")
-                    if text_to_type:
-                        print(f"[*] [MOTOR DISPATCH] Typing '{text_to_type}'...", flush=True)
-                        dispatch_human_keystrokes(text_to_type)
-
-                elif action_type == "launch":
-                    target = action_res.get("target", "")
-                    if target:
-                        print(f"[*] [LAUNCH] Opening '{target}' via ShellExecuteW...", flush=True)
-                        try:
-                            ctypes.windll.shell32.ShellExecuteW(None, "open", target, None, None, 1)
-                            print(f"[+] [LAUNCH OK] '{target}' dispatched.", flush=True)
-                        except Exception as launch_err:
-                            print(f"[!] ShellExecute failed ({launch_err}), trying Start Menu search...", flush=True)
-                            _u32 = ctypes.windll.user32
-                            _u32.keybd_event(0x5B, 0, 0, 0)
-                            _u32.keybd_event(0x5B, 0, 2, 0)
-                            time.sleep(0.4)
-                            dispatch_human_keystrokes(target)
-                            time.sleep(0.3)
-                            _u32.keybd_event(0x0D, 0, 0, 0)
-                            _u32.keybd_event(0x0D, 0, 2, 0)
-
-                elif action_type == "press_key":
-                    key = action_res.get("key", "")
-                    if key:
-                        print(f"[*] [KEY DISPATCH] Pressing '{key}'...", flush=True)
-                        _KEY_VK = {
-                            "win": 0x5B, "alt": 0x12, "ctrl": 0x11, "shift": 0x10,
-                            "enter": 0x0D, "return": 0x0D, "tab": 0x09, "escape": 0x1B,
-                            "esc": 0x1B, "space": 0x20, "backspace": 0x08, "delete": 0x2E,
-                            "up": 0x26, "down": 0x28, "left": 0x25, "right": 0x27,
-                            "f4": 0x73, "f5": 0x74,
-                        }
-                        _parts = [p.strip() for p in key.lower().split("+")]
-                        _mods = [p for p in _parts[:-1] if p in _KEY_VK]
-                        _main_key = _parts[-1]
-                        _u32 = ctypes.windll.user32
-                        for mod in _mods:
-                            _u32.keybd_event(_KEY_VK[mod], 0, 0, 0)
-                        _vk = _KEY_VK.get(_main_key, ord(_main_key.upper()[0]) if len(_main_key) == 1 else 0)
-                        if _vk:
-                            _u32.keybd_event(_vk, 0, 0, 0)
-                            _u32.keybd_event(_vk, 0, 2, 0)
-                        for mod in reversed(_mods):
-                            _u32.keybd_event(_KEY_VK[mod], 0, 2, 0)
-
-                elif action_type == "task":
-                    # "task" means the local parser couldn't map this command to a
-                    # concrete action.  Without an API key we cannot escalate to the
-                    # cloud agent, so report the ambiguity clearly.
-                    print(
-                        f"[!] [TASK AMBIGUOUS] Could not map '{step_label}' to a concrete action. "
-                        "Set OPENAI_API_KEY to use the cloud vision agent for complex tasks.",
-                        flush=True,
-                    )
-
-                else:
-                    print(f"[!] [UNHANDLED ACTION] {action_res}", flush=True)
-
+            from tools.interactive_loop import run_autonomous_task_loop
             try:
-                screen_state = get_screen_state_text()
-                for _i, _sub_cmd in enumerate(_sub_commands, 1):
-                    if len(_sub_commands) > 1:
-                        print(f"[*] [STEP {_i}/{len(_sub_commands)}] '{_sub_cmd}'", flush=True)
-                    _action_res = predict_action(f"Objective: {_sub_cmd}\nScreen State: {screen_state}")
-                    _dispatch_native_action(_action_res, _sub_cmd)
-                    if _i < len(_sub_commands):
-                        time.sleep(0.4)  # brief pause between steps
+                loop_res = run_autonomous_task_loop(prompt_input, max_steps=8, real_execution=True)
+                print(f"[*] [MIKU AUTONOMOUS LOOP FINISHED] Status: {loop_res.get('status')}", flush=True)
             except KeyboardInterrupt:
                 print("\n[!] [TASK ABORTED] Execution stopped by user via CTRL+C. Control returned to console.", flush=True)
             except Exception as exc:
