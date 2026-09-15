@@ -78,11 +78,25 @@ def parse_goal_intent(goal: str) -> Dict[str, Any]:
     return intent
 
 
+import msvcrt
+
+
+def flush_stdin_buffer():
+    """Flushes any leftover buffered keystrokes in Windows console stdin."""
+    if sys.platform == "win32":
+        try:
+            while msvcrt.kbhit():
+                msvcrt.getch()
+        except Exception:
+            pass
+
+
 def fast_confirm_action(action_description: str, target_details: Dict[str, Any]) -> bool:
     """
     Fast interactive confirmation gate:
     Displays exact proposed action and target details cleanly.
-    Requires pressing [ENTER] to approve, or any text/character to cancel.
+    Requires a single live physical keypress: [ENTER] or [Y] or [SPACE] to approve,
+    or [ESC] / any other key to cancel.
     """
     if not sys.stdin or not sys.stdin.isatty():
         if os.environ.get("MIKU_AUTONOMOUS_MODE", "false").strip().lower() in ("true", "1", "yes"):
@@ -93,14 +107,33 @@ def fast_confirm_action(action_description: str, target_details: Dict[str, Any])
     print("\n" + "-" * 70)
     print(f"[MIKU PROPOSED ACTION] : {action_description}")
     print(f"Target Details        : {target_details}")
-    print("Press [ENTER] to Approve & Dispatch, or type any character + [ENTER] to Cancel:")
-    print("-" * 70)
+    print(">>> Press [ENTER] or [Y] to APPROVE & DISPATCH, or [ESC] / any other key to CANCEL <<<")
+    print("-" * 70, flush=True)
+
+    if sys.platform == "win32":
+        try:
+            flush_stdin_buffer()
+            ch = msvcrt.getch()
+            # Handle special extended keys (e.g. arrow keys b'\x00' or b'\xe0')
+            if ch in (b'\x00', b'\xe0'):
+                msvcrt.getch()
+                print("[-] CANCELLED (Extended keypress)\n", flush=True)
+                return False
+
+            if ch in (b'\r', b'\n', b'y', b'Y', b' '):
+                print("[+] APPROVED by User keypress\n", flush=True)
+                return True
+            else:
+                print(f"[-] CANCELLED by User keypress\n", flush=True)
+                return False
+        except Exception as exc:
+            print(f"[!] msvcrt exception: {exc}, falling back to input()...", flush=True)
 
     try:
-        resp = input("Confirmation Choice: ").strip()
+        resp = input("Confirmation Choice [ENTER=Approve / Any=Cancel]: ").strip()
         return resp == "" or resp.upper() in ("Y", "YES", "OK")
     except Exception as exc:
-        print(f"[!] Confirmation exception: {exc}")
+        print(f"[!] Confirmation exception: {exc}", flush=True)
         return False
 
 
