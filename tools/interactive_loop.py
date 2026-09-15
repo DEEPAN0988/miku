@@ -339,14 +339,18 @@ def run_autonomous_task_loop(
                 time.sleep(2.0)
                 continue
 
+        # If app result was previously clicked, continuously glide cursor to UAC 'Yes' option and confirm
+        if app_result_clicked:
+            print("  [*] App result previously clicked; gliding mouse cursor to UAC 'Yes' option...")
+            dispatch_uac_yes_confirmation(retry_count=4, delay_between=0.3)
+            time.sleep(1.2)
+            continue
+
         # Phase 1: Open Start Menu if not active
         if snap.title not in ("Search", "Start"):
-            if app_result_clicked or step_count == 1:
+            if step_count == 1:
                 print("  [*] Checking active screen for UAC prompt; gliding mouse cursor to UAC 'Yes' option...")
-                dispatch_uac_yes_confirmation()
-                if app_result_clicked:
-                    time.sleep(1.5)
-                    continue
+                dispatch_uac_yes_confirmation(retry_count=2, delay_between=0.2)
 
             action_desc = "Open Windows Start Menu via Win Key"
             details = {"action": "dispatch_vk_key(VK_LWIN)", "foreground_window": snap.title}
@@ -467,7 +471,7 @@ def run_autonomous_task_loop(
                 time.sleep(0.05)
                 dispatch_enter_key(hold_duration=0.08)
                 time.sleep(0.4)
-                dispatch_uac_yes_confirmation()
+                dispatch_uac_yes_confirmation(retry_count=4, delay_between=0.3)
                 # Bypass UAC elevation prompts by launching direct app binary with RunAsInvoker compatibility layer
                 try:
                     from tools.app_launcher import launch_app
@@ -479,7 +483,7 @@ def run_autonomous_task_loop(
                 if os.environ.get("MIKU_LIVE_EXECUTION", "false").strip().lower() in ("true", "1", "yes"):
                     dispatch_enter_key(hold_duration=0.08)
                     time.sleep(0.4)
-                    dispatch_uac_yes_confirmation()
+                    dispatch_uac_yes_confirmation(retry_count=4, delay_between=0.3)
             os.environ["MIKU_FAST_CONFIRM_PASSTHROUGH"] = "false"
 
             app_result_clicked = True

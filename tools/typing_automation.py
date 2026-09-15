@@ -659,59 +659,77 @@ def dispatch_enter_key(hold_duration: float = 0.05) -> bool:
     return dispatch_vk_key(0x0D, hold_duration=hold_duration)
 
 
-def dispatch_uac_yes_confirmation() -> bool:
-    """
-    Glides physical mouse cursor to 'Yes' option on UAC dialog card and dispatches click,
-    followed by Left Arrow (VK_LEFT, 0x25) + Enter (VK_RETURN, 0x0D) and Alt+Y shortcut.
-    """
-    from tools.screen_inspector import _attach_thread_to_default_desktop, get_current_cursor_pos, human_mouse_move
-    _attach_thread_to_default_desktop()
-
-    # 1. Calculate physical screen bounds and UAC 'Yes' button coordinates
-    sw = user32.GetSystemMetrics(0)
-    sh = user32.GetSystemMetrics(1)
-    yes_x = int(sw * 0.455)
-    yes_y = int(sh * 0.605)
-
-    cur_x, cur_y = get_current_cursor_pos()
-    print(f"[*] Gliding mouse cursor from ({cur_x}, {cur_y}) to UAC 'Yes' option at ({yes_x}, {yes_y})...", flush=True)
-
-    # 2. Smooth minimum-jerk Bézier physical mouse glide to 'Yes' button
+def get_physical_screen_size() -> Tuple[int, int]:
+    """Retrieves unscaled physical hardware display resolution (DESKTOPHORZRES x DESKTOPVERTRES)."""
     try:
-        human_mouse_move(cur_x, cur_y, yes_x, yes_y, duration=0.25)
-        time.sleep(0.04)
-        user32.mouse_event(0x0002, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTDOWN
-        time.sleep(0.03)
-        user32.mouse_event(0x0004, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTUP
-    except Exception as exc:
-        print(f"[!] Mouse glide exception: {exc}", flush=True)
-
-    time.sleep(0.08)
-
-    # 3. Shift focus from default 'No' to 'Yes' button via Left Arrow and press Enter
-    dispatch_vk_key(0x25, hold_duration=0.06)  # VK_LEFT
-    time.sleep(0.08)
-    dispatch_vk_key(0x0D, hold_duration=0.08)  # VK_RETURN
-    time.sleep(0.12)
-
-    # 4. Alt+Y accelerator backup (VK_MENU=0x12, Y=0x59)
-    try:
-        scan_alt = user32.MapVirtualKeyW(0x12, 0)
-        scan_y = user32.MapVirtualKeyW(0x59, 0)
-        extra = ctypes.c_ulong(0)
-
-        inp1 = INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(wVk=0x12, wScan=scan_alt, dwFlags=0, time=0, dwExtraInfo=ctypes.pointer(extra)))
-        inp2 = INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(wVk=0x59, wScan=scan_y, dwFlags=0, time=0, dwExtraInfo=ctypes.pointer(extra)))
-        inp3 = INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(wVk=0x59, wScan=scan_y, dwFlags=KEYEVENTF_KEYUP, time=0, dwExtraInfo=ctypes.pointer(extra)))
-        inp4 = INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(wVk=0x12, wScan=scan_alt, dwFlags=KEYEVENTF_KEYUP, time=0, dwExtraInfo=ctypes.pointer(extra)))
-
-        user32.SendInput(1, ctypes.byref(inp1), ctypes.sizeof(INPUT))
-        user32.SendInput(1, ctypes.byref(inp2), ctypes.sizeof(INPUT))
-        time.sleep(0.04)
-        user32.SendInput(1, ctypes.byref(inp3), ctypes.sizeof(INPUT))
-        user32.SendInput(1, ctypes.byref(inp4), ctypes.sizeof(INPUT))
+        dc = user32.GetDC(0)
+        sw = ctypes.windll.gdi32.GetDeviceCaps(dc, 118)  # DESKTOPHORZRES
+        sh = ctypes.windll.gdi32.GetDeviceCaps(dc, 117)  # DESKTOPVERTRES
+        user32.ReleaseDC(0, dc)
+        if sw > 0 and sh > 0:
+            return sw, sh
     except Exception:
         pass
+    return user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
+
+
+def dispatch_uac_yes_confirmation(retry_count: int = 4, delay_between: float = 0.3) -> bool:
+    """
+    Glides physical mouse cursor to 'Yes' option on UAC dialog card and dispatches click,
+    followed by Left Arrow (VK_LEFT, 0x25) + Enter (VK_RETURN, 0x0D) and Alt+Y shortcut,
+    retrying across multiple attempts to handle delayed Secure Desktop rendering.
+    """
+    from tools.screen_inspector import _attach_thread_to_default_desktop, get_current_cursor_pos, human_mouse_move
+
+    sw, sh = get_physical_screen_size()
+    yes_x = int(sw * 0.455)
+    yes_y = int(sh * 0.602)
+
+    for attempt in range(1, retry_count + 1):
+        _attach_thread_to_default_desktop()
+        cur_x, cur_y = get_current_cursor_pos()
+        print(f"[*] [UAC CONFIRMATION ATTEMPT {attempt}/{retry_count}] Gliding mouse cursor from ({cur_x}, {cur_y}) to UAC 'Yes' option at physical ({yes_x}, {yes_y})...", flush=True)
+
+        # 1. Smooth minimum-jerk Bézier physical mouse glide to 'Yes' button
+        try:
+            human_mouse_move(cur_x, cur_y, yes_x, yes_y, duration=0.20)
+            time.sleep(0.04)
+            user32.mouse_event(0x0002, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTDOWN
+            time.sleep(0.03)
+            user32.mouse_event(0x0004, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTUP
+        except Exception as exc:
+            print(f"[!] Mouse glide exception: {exc}", flush=True)
+
+        time.sleep(0.06)
+
+        # 2. Shift focus from default 'No' to 'Yes' button via Left Arrow and press Enter
+        dispatch_vk_key(0x25, hold_duration=0.06)  # VK_LEFT
+        time.sleep(0.06)
+        dispatch_vk_key(0x0D, hold_duration=0.08)  # VK_RETURN
+        time.sleep(0.08)
+
+        # 3. Alt+Y accelerator backup (VK_MENU=0x12, Y=0x59)
+        try:
+            scan_alt = user32.MapVirtualKeyW(0x12, 0)
+            scan_y = user32.MapVirtualKeyW(0x59, 0)
+            extra = ctypes.c_ulong(0)
+
+            inp1 = INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(wVk=0x12, wScan=scan_alt, dwFlags=0, time=0, dwExtraInfo=ctypes.pointer(extra)))
+            inp2 = INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(wVk=0x59, wScan=scan_y, dwFlags=0, time=0, dwExtraInfo=ctypes.pointer(extra)))
+            inp3 = INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(wVk=0x59, wScan=scan_y, dwFlags=KEYEVENTF_KEYUP, time=0, dwExtraInfo=ctypes.pointer(extra)))
+            inp4 = INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(wVk=0x12, wScan=scan_alt, dwFlags=KEYEVENTF_KEYUP, time=0, dwExtraInfo=ctypes.pointer(extra)))
+
+            user32.SendInput(1, ctypes.byref(inp1), ctypes.sizeof(INPUT))
+            user32.SendInput(1, ctypes.byref(inp2), ctypes.sizeof(INPUT))
+            time.sleep(0.03)
+            user32.SendInput(1, ctypes.byref(inp3), ctypes.sizeof(INPUT))
+            user32.SendInput(1, ctypes.byref(inp4), ctypes.sizeof(INPUT))
+        except Exception:
+            pass
+
+        time.sleep(delay_between)
+
     return True
+
 
 
