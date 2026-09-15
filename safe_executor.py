@@ -7,6 +7,7 @@ and unused AuthToken issued by FastConfirm. Unauthorized or replayed actions are
 """
 
 import ctypes
+import subprocess
 import time
 from typing import Any, Dict, Optional, Tuple
 
@@ -195,3 +196,49 @@ class ActionDispatch:
             self.executed_actions.append(record)
             print(f"[SAFE EXECUTOR] Win32 text dispatched for '{target}'.")
             return record
+
+    def open(self, token: AuthToken) -> Dict[str, Any]:
+        """
+        Executes an OS-level application launch using subprocess.
+        MUST receive a valid, approved, unused AuthToken.
+        """
+        self._validate_token(token, expected_action_type="open")
+        token.mark_used()
+        target = token.target
+
+        print(f"[SAFE EXECUTOR] Dispatching OS-level launch command for: {target}")
+        if self.simulation_mode:
+            record = {
+                "action": "open",
+                "target": target,
+                "simulated": True,
+                "token_id": token.token_id,
+                "timestamp": time.time(),
+            }
+            self.executed_actions.append(record)
+            print(f"[SAFE EXECUTOR] [SIMULATED] Application open executed for '{target}'.")
+            return record
+
+        try:
+            subprocess.Popen(target, shell=True)
+            record = {
+                "action": "open",
+                "target": target,
+                "success": True,
+                "token_id": token.token_id,
+                "timestamp": time.time(),
+            }
+            self.executed_actions.append(record)
+            return record
+        except Exception as e:
+            record = {
+                "action": "open",
+                "target": target,
+                "success": False,
+                "reason": f"Failed to open {target}: {e}",
+                "token_id": token.token_id,
+                "timestamp": time.time(),
+            }
+            self.executed_actions.append(record)
+            return record
+

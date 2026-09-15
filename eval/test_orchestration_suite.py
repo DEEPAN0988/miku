@@ -302,6 +302,34 @@ class TestAgentLoop(unittest.TestCase):
 
         asyncio.run(run_test())
 
+    def test_open_action_bypasses_tree_inspector(self):
+        async def run_test():
+            def mock_input(prompt):
+                return "y"
+
+            hl = TargetHighlighter(enabled=False)
+            inspector = TreeInspector(mock_elements=[])  # Empty tree (closed app)
+            gate = FastConfirm(input_handler=mock_input, highlighter=hl)
+            executor = ActionDispatch(simulation_mode=True)
+            runner = AgentLoop(inspector=inspector, gate=gate, executor=executor)
+
+            tasks = [
+                TaskSpec(
+                    action_type="open",
+                    target_name="notepad",
+                    rationale="Launch notepad directly via OS.",
+                )
+            ]
+
+            results = await runner.run(tasks)
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0]["status"], "success")
+            self.assertEqual(results[0]["exec_result"]["action"], "open")
+            self.assertEqual(results[0]["exec_result"]["target"], "notepad")
+
+        asyncio.run(run_test())
+
+
 
 class TestRegexCommandParser(unittest.TestCase):
     """Test RegexCommandParser deterministic CLI parsing."""
@@ -328,8 +356,15 @@ class TestRegexCommandParser(unittest.TestCase):
         self.assertEqual(task.action_type, "read_screen_text")
         self.assertEqual(task.target_name, "Screen")
 
+    def test_open_command_parsing(self):
+        task = self.parser.parse('open "code"')
+        self.assertIsNotNone(task)
+        self.assertEqual(task.action_type, "open")
+        self.assertEqual(task.target_name, "code")
+
     def test_invalid_syntax_returns_none(self):
         self.assertIsNone(self.parser.parse("open Notepad and type hello"))
+
 
 
 

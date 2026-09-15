@@ -152,6 +152,44 @@ class AgentLoop:
                 else:
                     raise PipelineHaltedError(f"Pipeline aborted by user: {e}")
 
+        # OS-LEVEL LAUNCH ACTION BRANCH: Bypass UIA tree search (closed apps do not exist in UIA tree)
+        if task.action_type in ("open", "launch", "run_app"):
+            print(f"[MIKU IS LAUNCHING]: '{task.target_name}'")
+            if task.rationale:
+                print(f"  Rationale: {task.rationale}")
+
+            try:
+                token: AuthToken = await self.gate.request_confirmation(
+                    action_type="open",
+                    target=task.target_name,
+                    coords=(0, 0),
+                    payload=task.payload,
+                    rationale=task.rationale,
+                )
+                exec_result = self.executor.open(token)
+                return {
+                    "status": "success",
+                    "task": task.target_name,
+                    "action": task.action_type,
+                    "exec_result": exec_result,
+                }
+            except (ActionDeniedError, ConfirmationTimeoutError) as e:
+                recovery = await self._handle_manual_recovery(str(e), task)
+                if recovery == "r":
+                    return await self.run_task(task_input)
+                elif recovery == "s":
+                    return {"status": "skipped", "target": task.target_name, "reason": str(e)}
+                else:
+                    raise PipelineHaltedError(f"Pipeline aborted by user: {e}")
+            except UnauthorizedActionError as e:
+                recovery = await self._handle_manual_recovery(f"Security Error: {e}", task)
+                if recovery == "r":
+                    return await self.run_task(task_input)
+                elif recovery == "s":
+                    return {"status": "skipped", "target": task.target_name, "reason": str(e)}
+                else:
+                    raise PipelineHaltedError(f"Pipeline aborted due to authorization failure: {e}")
+
         # HARDWARE ACTIONS BRANCH: Strict FastConfirm gate authorization required
         while True:
             # Step a: Ask TreeInspector for element coordinates & bounding box
@@ -197,6 +235,8 @@ class AgentLoop:
                     exec_result = self.executor.click(token)
                 elif task.action_type == "type":
                     exec_result = self.executor.type(token)
+                elif task.action_type == "open":
+                    exec_result = self.executor.open(token)
                 else:
                     raise ValueError(f"Unsupported action type: {task.action_type}")
 

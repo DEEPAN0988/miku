@@ -29,6 +29,9 @@ class RegexCommandParser:
         # 3. TYPE Command: type <payload> into <target>
         self.type_pattern = re.compile(r"^type\s+['\"](.+?)['\"]\s+into\s+['\"]?(.+?)['\"]?$", re.IGNORECASE)
 
+        # 4. OPEN Command: open <program_name>
+        self.open_pattern = re.compile(r"^open\s+(?:['\"](.+?)['\"]|([a-zA-Z0-9_\-\.\:\\]+))$", re.IGNORECASE)
+
     def parse(self, user_input: str) -> Optional[TaskSpec]:
         user_input = user_input.strip()
 
@@ -63,6 +66,16 @@ class RegexCommandParser:
                 rationale=f"[HARDCODED MACRO] Operator commanded READ on '{target}'."
             )
 
+        # Check for OPEN
+        match = self.open_pattern.match(user_input)
+        if match:
+            target = match.group(1) or match.group(2)
+            return TaskSpec(
+                action_type="open",
+                target_name=target,
+                rationale=f"[HARDCODED MACRO] Operator commanded OS to OPEN '{target}'."
+            )
+
         return None
 
 async def interactive_macro_terminal():
@@ -73,6 +86,7 @@ async def interactive_macro_terminal():
     print("  1. read <target>")
     print("  2. click <target>")
     print("  3. type \"<text>\" into <target>")
+    print("  4. open <program_name>")
     print("="*50)
 
     # Boot the execution framework
