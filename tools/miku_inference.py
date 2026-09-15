@@ -287,6 +287,54 @@ def predict_action(context_text: str) -> dict:
     return _parse_intent(objective)
 
 
+def _resolve_app_path(name: str) -> str:
+    """
+    Resolves a natural-language app name to a real executable path where known.
+    Falls back to the raw name string (ShellExecute will try the Start Menu).
+    """
+    import os as _os
+    pf   = r"C:\Program Files"
+    pf86 = r"C:\Program Files (x86)"
+    lapp = _os.environ.get("LOCALAPPDATA", r"C:\Users\Default\AppData\Local")
+    roam = _os.environ.get("APPDATA",      r"C:\Users\Default\AppData\Roaming")
+
+    _KNOWN: dict = {
+        # Wuthering Waves
+        "wuthering waves":  rf"{pf}\Wuthering Waves\launcher.exe",
+        "wuthering wave":   rf"{pf}\Wuthering Waves\launcher.exe",
+        "wutheringwaves":   rf"{pf}\Wuthering Waves\launcher.exe",
+        # Browsers
+        "chrome":           rf"{pf}\Google\Chrome\Application\chrome.exe",
+        "google chrome":    rf"{pf}\Google\Chrome\Application\chrome.exe",
+        "firefox":          rf"{pf}\Mozilla Firefox\firefox.exe",
+        "edge":             rf"{pf}\Microsoft\Edge\Application\msedge.exe",
+        "msedge":           rf"{pf}\Microsoft\Edge\Application\msedge.exe",
+        # Common tools
+        "discord":          rf"{lapp}\Discord\Update.exe",
+        "steam":            rf"{pf86}\Steam\steam.exe",
+        "vscode":           rf"{lapp}\Programs\Microsoft VS Code\Code.exe",
+        "vs code":          rf"{lapp}\Programs\Microsoft VS Code\Code.exe",
+        "notepad":          "notepad.exe",
+        "notepad++":        rf"{pf}\Notepad++\notepad++.exe",
+        "explorer":         "explorer.exe",
+        "calc":             "calc.exe",
+        "calculator":       "calc.exe",
+        "paint":            "mspaint.exe",
+        "cmd":              "cmd.exe",
+        "powershell":       "powershell.exe",
+        "task manager":     "taskmgr.exe",
+        "taskmgr":          "taskmgr.exe",
+        "spotify":          rf"{roam}\Spotify\Spotify.exe",
+    }
+
+    key = name.strip().lower()
+    resolved = _KNOWN.get(key, name)
+    # If it's a full path and doesn't exist, fall back to bare name
+    if resolved != name and not _os.path.exists(resolved):
+        return name
+    return resolved
+
+
 def _parse_intent(objective: str) -> dict:
     """
     Deterministic intent parser. Converts natural-language desktop commands into
@@ -298,7 +346,7 @@ def _parse_intent(objective: str) -> dict:
     # open / launch / start / run <app>
     m = _re.match(r'^(?:open|launch|start|run)\s+(.+)$', cmd)
     if m:
-        return {"action": "launch", "target": m.group(1).strip()}
+        return {"action": "launch", "target": _resolve_app_path(m.group(1).strip())}
 
     # click / tap <element>
     m = _re.match(r'^(?:click|tap|press\s+on)\s+(?:the\s+)?(.+)$', cmd)
