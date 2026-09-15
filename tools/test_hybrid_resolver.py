@@ -71,22 +71,31 @@ def hybrid_resolve_tool(query: str, neural_action: str) -> str:
     # If neural action is completely absent from Top-3 lexical candidates, use Top-1 BM25!
     return top_tool
 
-# Load the raw neural generations from Phase 8 evaluation results
-with open("logs/phase8_tool_sft/evaluation_results.json", "r") as f:
-    eval_data = json.load(f)
+def run_hybrid_evaluation():
+    try:
+        with open("logs/phase8_tool_sft/evaluation_results.json", "r") as f:
+            eval_data = json.load(f)
+    except FileNotFoundError:
+        print("[SKIP] logs/phase8_tool_sft/evaluation_results.json not found.")
+        return
 
-for suite in ["in_distribution", "ood_phrasings", "novel_arguments"]:
-    cases = eval_data[suite]
-    n = len(cases)
-    matches = 0
-    print(f"\n=== TESTING HYBRID (BM25 + NEURAL) ON {suite.upper()} (N={n}) ===")
-    for c in cases:
-        q = c["instruction"]
-        exp = c["expected_action"]
-        neural = c["parsed_action"]
-        resolved = hybrid_resolve_tool(q, neural)
-        ok = (resolved == exp)
-        if ok:
-            matches += 1
-        print(f"\"{q}\" -> Neural: {neural:18} | Resolved: {resolved:18} | Expected: {exp:18} | Match: {ok}")
-    print(f"Total Matches: {matches}/{n} ({matches/n*100:.1f}%)")
+    for suite in ["in_distribution", "ood_phrasings", "novel_arguments"]:
+        cases = eval_data[suite]
+        n = len(cases)
+        matches = 0
+        print(f"\n=== TESTING HYBRID (BM25 + NEURAL) ON {suite.upper()} (N={n}) ===")
+        for c in cases:
+            q = c["instruction"]
+            exp = c["expected_action"]
+            neural = c["parsed_action"]
+            resolved = hybrid_resolve_tool(q, neural)
+            ok = (resolved == exp)
+            if ok:
+                matches += 1
+            print(f"\"{q}\" -> Neural: {neural:18} | Resolved: {resolved:18} | Expected: {exp:18} | Match: {ok}")
+        print(f"Total Matches: {matches}/{n} ({matches/n*100:.1f}%)")
+
+
+if __name__ == "__main__":
+    run_hybrid_evaluation()
+

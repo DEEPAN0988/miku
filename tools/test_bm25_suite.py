@@ -71,48 +71,99 @@ ALL_TEST_SUITES = {
 def tokenize(text: str) -> List[str]:
     return [w for w in re.findall(r"\b[a-zA-Z0-9%]+\b", text.lower()) if len(w) > 1]
 
-corpus = {tool: tokenize(desc) for tool, desc in TOOL_DESCRIPTIONS.items()}
-vocab = set(w for doc in corpus.values() for w in doc)
-N = len(corpus)
+def run_bm25_evaluation():
+    corpus = {tool: tokenize(desc) for tool, desc in TOOL_DESCRIPTIONS.items()}
+    vocab = set(w for doc in corpus.values() for w in doc)
+    N = len(corpus)
 
-idf = {}
-for w in vocab:
-    df = sum(1 for doc in corpus.values() if w in doc)
-    idf[w] = math.log((N - df + 0.5) / (df + 0.5) + 1.0)
+    idf = {}
+    for w in vocab:
+        df = sum(1 for doc in corpus.values() if w in doc)
+        idf[w] = math.log((N - df + 0.5) / (df + 0.5) + 1.0)
 
-k1 = 1.5
-b = 0.75
-avgdl = sum(len(doc) for doc in corpus.values()) / N
+    k1 = 1.5
+    b = 0.75
+    avgdl = sum(len(doc) for doc in corpus.values()) / N
 
-def bm25_rank(query: str) -> List[Tuple[str, float]]:
-    q_tokens = tokenize(query)
-    scores = {}
-    for tool, doc in corpus.items():
-        score = 0.0
-        doc_len = len(doc)
-        counts = Counter(doc)
-        for t in q_tokens:
-            if t in idf and t in counts:
-                tf = counts[t]
-                num = tf * (k1 + 1)
-                den = tf + k1 * (1 - b + b * (doc_len / avgdl))
-                score += idf[t] * (num / den)
-        scores[tool] = score
-    return sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    def bm25_rank(query: str) -> List[Tuple[str, float]]:
+        q_tokens = tokenize(query)
+        scores = {}
+        for tool, doc in corpus.items():
+            score = 0.0
+            doc_len = len(doc)
+            counts = Counter(doc)
+            for t in q_tokens:
+                if t in idf and t in counts:
+                    tf = counts[t]
+                    num = tf * (k1 + 1)
+                    den = tf + k1 * (1 - b + b * (doc_len / avgdl))
+                    score += idf[t] * (num / den)
+            scores[tool] = score
+        return sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
-for suite_name, cases in ALL_TEST_SUITES.items():
-    top1_correct = 0
-    top3_correct = 0
-    print(f"\n=== BM25 EVALUATION: {suite_name.upper()} (N={len(cases)}) ===")
-    for q, exp in cases:
-        ranked = bm25_rank(q)
-        top1 = ranked[0][0] if ranked and ranked[0][1] > 0 else "NONE"
-        top3 = [t for t, s in ranked[:3] if s > 0]
-        m1 = (top1 == exp)
-        m3 = (exp in top3)
-        if m1:
-            top1_correct += 1
-        if m3:
-            top3_correct += 1
-        print(f"\"{q}\" -> Expected: {exp:18} | Top-1: {top1:18} (Match: {m1}) | Top-3: {m3}")
-    print(f"Summary for {suite_name}: Top-1={top1_correct}/{len(cases)} ({top1_correct/len(cases)*100:.1f}%), Top-3 Recall={top3_correct}/{len(cases)} ({top3_correct/len(cases)*100:.1f}%)")
+    for suite_name, cases in ALL_TEST_SUITES.items():
+        top1_correct = 0
+        top3_correct = 0
+        print(f"\n=== BM25 EVALUATION: {suite_name.upper()} (N={len(cases)}) ===")
+        for q, exp in cases:
+            ranked = bm25_rank(q)
+            top1 = ranked[0][0] if ranked and ranked[0][1] > 0 else "NONE"
+            top3 = [t for t, s in ranked[:3] if s > 0]
+            m1 = (top1 == exp)
+            m3 = (exp in top3)
+            if m1:
+                top1_correct += 1
+            if m3:
+                top3_correct += 1
+            print(f"\"{q}\" -> Expected: {exp:18} | Top-1: {top1:18} (Match: {m1}) | Top-3: {m3}")
+        print(f"Summary for {suite_name}: Top-1={top1_correct}/{len(cases)} ({top1_correct/len(cases)*100:.1f}%), Top-3 Recall={top3_correct}/{len(cases)} ({top3_correct/len(cases)*100:.1f}%)")
+
+
+import unittest
+
+
+class TestBM25Suite(unittest.TestCase):
+    def test_bm25_suite_accuracy(self):
+        corpus = {tool: tokenize(desc) for tool, desc in TOOL_DESCRIPTIONS.items()}
+        vocab = set(w for doc in corpus.values() for w in doc)
+        N = len(corpus)
+
+        idf = {}
+        for w in vocab:
+            df = sum(1 for doc in corpus.values() if w in doc)
+            idf[w] = math.log((N - df + 0.5) / (df + 0.5) + 1.0)
+
+        k1 = 1.5
+        b = 0.75
+        avgdl = sum(len(doc) for doc in corpus.values()) / N
+
+        def bm25_rank(query: str) -> List[Tuple[str, float]]:
+            q_tokens = tokenize(query)
+            scores = {}
+            for tool, doc in corpus.items():
+                score = 0.0
+                doc_len = len(doc)
+                counts = Counter(doc)
+                for t in q_tokens:
+                    if t in idf and t in counts:
+                        tf = counts[t]
+                        num = tf * (k1 + 1)
+                        den = tf + k1 * (1 - b + b * (doc_len / avgdl))
+                        score += idf[t] * (num / den)
+                scores[tool] = score
+            return sorted(scores.items(), key=lambda x: x[1], reverse=True)
+
+        for suite_name, cases in ALL_TEST_SUITES.items():
+            top3_correct = 0
+            for q, exp in cases:
+                ranked = bm25_rank(q)
+                top3 = [t for t, s in ranked[:3] if s > 0]
+                if exp in top3:
+                    top3_correct += 1
+            self.assertGreaterEqual(top3_correct / len(cases), 0.85, f"Top-3 recall low for {suite_name}")
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
