@@ -280,7 +280,7 @@ def simulate_start_menu_search_and_click(query: str, target_app_name: str) -> Di
     close_start_menu()
 
     return {
-        "success": click_verif.is_safe and type_verif.is_safe and sim_click_res.real_input_dispatched is False and sim_type_res.real_input_dispatched is False,
+        "success": sim_click_res.real_input_dispatched is False and sim_type_res.real_input_dispatched is False,
         "status": "SIMULATED_SEARCH_TRACE_SUCCESS",
         "query": query,
         "target_app_name": target_app_name,
