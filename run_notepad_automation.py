@@ -18,7 +18,7 @@ from human_gate import FastConfirm
 from safe_executor import ActionDispatch
 from ui_inspector import TreeInspector
 from visual_highlighter import TargetHighlighter
-from llm_bridge import MikuOrchestrationBridge
+from cli_macro_engine import RegexCommandParser
 
 
 async def main():
@@ -49,7 +49,6 @@ async def main():
         executor=executor,
         config=default_config,
     )
-    bridge = MikuOrchestrationBridge(agent_loop=agent)
 
     # Sequence of tasks requested by user
     tasks = [

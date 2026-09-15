@@ -29,7 +29,7 @@ from safe_executor import ActionDispatch, UnauthorizedActionError
 from ui_inspector import ElementNotFoundError, TreeInspector
 from agent_loop import AgentLoop, PipelineHaltedError, TaskSpec
 from visual_highlighter import TargetHighlighter
-from llm_bridge import MikuOrchestrationBridge
+from cli_macro_engine import RegexCommandParser
 
 
 class TestOrchestratorConfig(unittest.TestCase):
@@ -303,38 +303,34 @@ class TestAgentLoop(unittest.TestCase):
         asyncio.run(run_test())
 
 
-class TestLLMBridge(unittest.TestCase):
-    """Test MikuOrchestrationBridge execution and error feedback."""
+class TestRegexCommandParser(unittest.TestCase):
+    """Test RegexCommandParser deterministic CLI parsing."""
 
-    def test_bridge_execute_ui_action_denial_feedback(self):
-        async def run_test():
-            mock_nodes = [
-                {"name": "Save", "automation_id": "btn_save", "control_type": "Button", "bounds": (10, 10, 50, 30), "center": (30, 20)},
-            ]
+    def setUp(self):
+        self.parser = RegexCommandParser()
 
-            def mock_input(prompt):
-                return "n"  # Deny action / quit recovery
+    def test_click_command_parsing(self):
+        task = self.parser.parse("click Start")
+        self.assertIsNotNone(task)
+        self.assertEqual(task.action_type, "click")
+        self.assertEqual(task.target_name, "Start")
 
-            hl = TargetHighlighter(enabled=False)
-            inspector = TreeInspector(mock_elements=mock_nodes)
-            gate = FastConfirm(input_handler=mock_input, highlighter=hl)
-            executor = ActionDispatch(simulation_mode=True)
-            runner = AgentLoop(
-                inspector=inspector,
-                gate=gate,
-                executor=executor,
-                input_handler=mock_input,
-            )
-            bridge = MikuOrchestrationBridge(agent_loop=runner)
+    def test_type_command_parsing(self):
+        task = self.parser.parse('type "Notepad" into "Search"')
+        self.assertIsNotNone(task)
+        self.assertEqual(task.action_type, "type")
+        self.assertEqual(task.target_name, "Search")
+        self.assertEqual(task.payload, "Notepad")
 
-            res = await bridge.execute_ui_action(
-                action="click",
-                target="Save",
-                rationale="Save current file.",
-            )
-            self.assertIn("[REJECTED BY HUMAN OPERATOR]", res)
+    def test_read_command_parsing(self):
+        task = self.parser.parse("read Screen")
+        self.assertIsNotNone(task)
+        self.assertEqual(task.action_type, "read_screen_text")
+        self.assertEqual(task.target_name, "Screen")
 
-        asyncio.run(run_test())
+    def test_invalid_syntax_returns_none(self):
+        self.assertIsNone(self.parser.parse("open Notepad and type hello"))
+
 
 
 if __name__ == "__main__":
