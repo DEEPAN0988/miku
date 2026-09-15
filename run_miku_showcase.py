@@ -92,7 +92,10 @@ def showcase():
     print("\n" + "=" * 80)
     print(" [STAGE 4] DESKTOP PERCEPTION & LIVE VISUAL OVERLAY HIGHLIGHTING")
     print("=" * 80)
-    print("[*] Flashing visual target highlight overlay at screen center (960, 540)...")
+    from miku_hud import update_miku_hud
+    update_miku_hud("Showcase Mode: Active", "Stage 4: Perception & Visual Overlay")
+
+    print("\n[*] Flashing visual target highlight overlay at screen center (960, 540)...")
     flash_target_highlight(960, 540, w=120, h=60, label="MIKU Target Reticle", duration=1.2)
     time.sleep(1.5)
 
@@ -103,6 +106,7 @@ def showcase():
         "sys info",
     ]
     asyncio.run(run_batch_macro(batch_cmds))
+    update_miku_hud("Showcase Complete", "100% Operational")
 
     print("\n" + "=" * 80)
     print(" [SHOWCASE COMPLETE] 100% SUBSYSTEMS VERIFIED & FULLY OPERATIONAL!")

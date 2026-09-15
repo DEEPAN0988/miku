@@ -229,6 +229,12 @@ def run_autonomous_task_loop(
         step_count += 1
         print(f"\n--- STEP {step_count}: REAL-TIME PERCEPTION ---")
 
+        try:
+            from miku_hud import update_miku_hud
+            update_miku_hud(f"Task: {intent['raw_goal']}", f"Step {step_count}/{max_steps}")
+        except Exception:
+            pass
+
         # 1. REAL-TIME PERCEPTION (Always fresh state)
         _attach_thread_to_default_desktop()
         fg_hwnd = user32.GetForegroundWindow()
