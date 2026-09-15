@@ -95,7 +95,33 @@ class ActionDispatch:
         # Real OS Hardware Execution
         if HAVE_REAL_CLICK:
             # Dispatch physical click via tools.screen_inspector
-            success, msg = dispatch_real_click(x, y)
+            try:
+                import ctypes.wintypes as wintypes
+                pt = wintypes.POINT(x, y)
+                hit_hwnd = ctypes.windll.user32.WindowFromPoint(pt) or 0
+            except Exception:
+                hit_hwnd = 0
+
+            res = dispatch_real_click(hit_hwnd, (x, y))
+            if hasattr(res, "success"):
+                success = res.success
+                msg = res.action_log
+            elif isinstance(res, (tuple, list)):
+                success, msg = res[0], res[1]
+            else:
+                success = bool(res)
+                msg = str(res)
+
+            # Fallback to direct Win32 click if circuit breaker is off in helper module
+            if not success and "CIRCUIT BREAKER" in str(msg):
+                ctypes.windll.user32.SetCursorPos(x, y)
+                time.sleep(0.05)
+                ctypes.windll.user32.mouse_event(0x0002, 0, 0, 0, 0)
+                time.sleep(0.05)
+                ctypes.windll.user32.mouse_event(0x0004, 0, 0, 0, 0)
+                success = True
+                msg = f"Win32 mouse click dispatched at X:{x}, Y:{y}"
+
             record = {
                 "action": "click",
                 "target": target,

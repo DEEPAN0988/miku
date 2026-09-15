@@ -1059,6 +1059,11 @@ class ClickDispatchResult:
     button: str = "left"
     real_input_dispatched: bool = False
 
+    def __iter__(self):
+        yield self.success
+        yield self.action_log
+        yield self.status
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "success": self.success,
