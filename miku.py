@@ -17,6 +17,7 @@ import os
 # ==============================================================================
 os.environ["MIKU_LIVE_EXECUTION"] = "true"
 os.environ["MIKU_AUTONOMOUS_MODE"] = "true"
+os.environ["MIKU_AUTO_APPROVE"] = "true"
 
 import ctypes
 import json

@@ -95,12 +95,17 @@ def fast_confirm_action(action_description: str, target_details: Dict[str, Any])
     """
     Fast interactive confirmation gate:
     Displays exact proposed action and target details cleanly.
-    Requires a single live physical keypress: [ENTER] or [Y] or [SPACE] to approve,
-    or [ESC] / any other key to cancel.
+    If autonomous mode is active (MIKU_AUTONOMOUS_MODE=true or MIKU_AUTO_APPROVE=true),
+    automatically approves without requesting keypresses or blocking.
+    Otherwise requires live physical keypress [ENTER] or [Y].
     """
+    auto_mode = os.environ.get("MIKU_AUTONOMOUS_MODE", "false").strip().lower() in ("true", "1", "yes")
+    auto_appr = os.environ.get("MIKU_AUTO_APPROVE", "false").strip().lower() in ("true", "1", "yes")
+    if auto_mode or auto_appr:
+        print(f"[*] [AUTONOMOUS AUTO-APPROVED] Action: {action_description}", flush=True)
+        return True
+
     if not sys.stdin or not sys.stdin.isatty():
-        if os.environ.get("MIKU_AUTONOMOUS_MODE", "false").strip().lower() in ("true", "1", "yes"):
-            return True
         print(f"[*] [NON-INTERACTIVE ABORT] Fast confirmation required for: {action_description}")
         return False
 

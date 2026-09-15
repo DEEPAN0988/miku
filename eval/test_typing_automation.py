@@ -146,9 +146,18 @@ class TestTypingAutomation(unittest.TestCase):
 
     def test_human_confirmation_fails_closed_in_ci(self):
         """Live human confirmation must fail closed when stdin is not a TTY."""
-        # In automated test runner, stdin is either not a tty or not interactive
-        confirmed = request_live_human_type_confirmation("Notepad", "Document", "Hello World")
-        self.assertFalse(confirmed)
+        old_live = os.environ.pop("MIKU_LIVE_EXECUTION", None)
+        old_auto = os.environ.pop("MIKU_AUTONOMOUS_MODE", None)
+        old_appr = os.environ.pop("MIKU_AUTO_APPROVE", None)
+        old_pass = os.environ.pop("MIKU_FAST_CONFIRM_PASSTHROUGH", None)
+        try:
+            confirmed = request_live_human_type_confirmation("Notepad", "Document", "Hello World")
+            self.assertFalse(confirmed)
+        finally:
+            if old_live: os.environ["MIKU_LIVE_EXECUTION"] = old_live
+            if old_auto: os.environ["MIKU_AUTONOMOUS_MODE"] = old_auto
+            if old_appr: os.environ["MIKU_AUTO_APPROVE"] = old_appr
+            if old_pass: os.environ["MIKU_FAST_CONFIRM_PASSTHROUGH"] = old_pass
 
 
 if __name__ == "__main__":

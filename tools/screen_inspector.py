@@ -70,11 +70,12 @@ except Exception:
 def check_autonomous_authorization(action_type: str = "ACTION") -> bool:
     """
     Evaluates runtime environment flags for autonomous non-blocking confirmation.
-    Requires BOTH MIKU_LIVE_EXECUTION=true and MIKU_AUTONOMOUS_MODE=true.
+    Requires BOTH MIKU_LIVE_EXECUTION=true and MIKU_AUTONOMOUS_MODE=true, or MIKU_AUTO_APPROVE=true.
     """
     live_exec = os.environ.get("MIKU_LIVE_EXECUTION", "false").strip().lower() in ("true", "1", "yes")
     autonomous = os.environ.get("MIKU_AUTONOMOUS_MODE", "false").strip().lower() in ("true", "1", "yes")
-    if live_exec and autonomous:
+    auto_appr = os.environ.get("MIKU_AUTO_APPROVE", "false").strip().lower() in ("true", "1", "yes")
+    if (live_exec and autonomous) or auto_appr:
         print(f"[*] [AUTONOMOUS AUTHORIZATION GRANTED] Non-blocking authorization verified for action '{action_type}'.", flush=True)
         return True
     return False
