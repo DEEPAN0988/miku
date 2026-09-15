@@ -1345,6 +1345,13 @@ def dispatch_real_click(
 
     # 6. Physical Mouse Click Dispatch via Win32 API with Human Bézier Movement
     x, y = coord
+    try:
+        from visual_highlighter import flash_target_highlight
+        b = element.bounds if isinstance(element, UIElement) else None
+        flash_target_highlight(x, y, bounds=b, label=el_name, duration=0.8)
+    except Exception:
+        pass
+
     cur_x, cur_y = get_current_cursor_pos()
     human_mouse_move(cur_x, cur_y, x, y, duration=0.20)
     time.sleep(0.02)

@@ -296,3 +296,35 @@ class TargetHighlighter:
             self._hwnd = None
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=1.0)
+
+
+_global_highlighter: Optional[VisualHighlighter] = None
+
+
+def get_global_highlighter() -> VisualHighlighter:
+    global _global_highlighter
+    if _global_highlighter is None:
+        _global_highlighter = VisualHighlighter(enabled=True)
+    return _global_highlighter
+
+
+def flash_target_highlight(
+    x: int,
+    y: int,
+    w: Optional[int] = None,
+    h: Optional[int] = None,
+    bounds: Optional[Tuple[int, int, int, int]] = None,
+    label: Optional[str] = None,
+    duration: float = 0.8,
+):
+    """Flashes a visual overlay highlight box on screen around the target element."""
+    try:
+        hl = get_global_highlighter()
+        hl.start_highlight(x=x, y=y, w=w, h=h, bounds=bounds, label=label)
+        def _clear():
+            time.sleep(duration)
+            hl.stop_highlight()
+        threading.Thread(target=_clear, daemon=True).start()
+    except Exception:
+        pass
+
