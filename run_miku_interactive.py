@@ -11,6 +11,32 @@ Usage:
 import sys
 import os
 
+import ctypes
+
+def check_and_elevate() -> bool:
+    """Checks if running as Admin; if not, requests elevation via ShellExecuteW 'runas'."""
+    try:
+        if not ctypes.windll.shell32.IsUserAnAdmin():
+            print("[*] Requesting Administrator Elevation (runas) for full UAC mouse control...", flush=True)
+            script_path = os.path.abspath(sys.argv[0])
+            args = " ".join([f'"{a}"' for a in sys.argv[1:]])
+            params = f'"{script_path}" {args}'.strip()
+            ret = ctypes.windll.shell32.ShellExecuteW(
+                None, "runas", sys.executable, params, None, 1
+            )
+            if ret > 32:
+                print("[+] Self-elevation request issued successfully.", flush=True)
+                sys.exit(0)
+            else:
+                print(f"[!] User declined elevation prompt (exit code {ret}). Continuing non-elevated...", flush=True)
+                return False
+        else:
+            print("[+] Process is running with Administrator privileges!", flush=True)
+            return True
+    except Exception as exc:
+        print(f"[!] Auto-elevation check failed: {exc}", flush=True)
+        return False
+
 # Set environment flags for 100% continuous autonomous execution (zero Y/Enter prompting)
 os.environ["MIKU_LIVE_EXECUTION"] = "true"
 os.environ["MIKU_AUTONOMOUS_MODE"] = "true"
@@ -28,6 +54,8 @@ si.REAL_CLICK_ENABLED = True
 ta.REAL_TYPE_ENABLED = True
 
 def main():
+    check_and_elevate()
+
     if len(sys.argv) > 1:
         task_goal = " ".join(sys.argv[1:])
     else:
