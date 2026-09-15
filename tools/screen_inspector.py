@@ -210,12 +210,16 @@ class ScreenSnapshot:
 
 
 def _attach_thread_to_default_desktop():
-    """Ensures calling thread accesses the interactive desktop."""
+    """Ensures calling thread accesses active input desktop (including Secure Desktop)."""
     try:
         user32 = ctypes.windll.user32
-        hdesk = user32.OpenDesktopW("Default", 0, False, 0x01FF)
+        hdesk = user32.OpenInputDesktop(0, False, 0x01FF)
         if hdesk:
             user32.SetThreadDesktop(hdesk)
+        else:
+            hdesk_def = user32.OpenDesktopW("Default", 0, False, 0x01FF)
+            if hdesk_def:
+                user32.SetThreadDesktop(hdesk_def)
     except Exception:
         pass
 
