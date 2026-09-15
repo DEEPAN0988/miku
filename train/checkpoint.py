@@ -41,6 +41,7 @@ def save_checkpoint(
     checkpoint_dir: str,
     val_loss: Optional[float] = None,
     samples: Optional[List[Dict[str, str]]] = None,
+    filename: Optional[str] = None,
 ) -> str:
     """
     Save a checkpoint to disk.
@@ -55,13 +56,17 @@ def save_checkpoint(
         val_loss:        validation loss (None if not computed)
         samples:         list of {"prompt": str, "generated": str} dicts
                          saved verbatim alongside the loss
+        filename:        optional custom filename (defaults to step_XXXXXXX.pt)
 
     Returns:
         path to saved checkpoint file
     """
     os.makedirs(checkpoint_dir, exist_ok=True)
 
-    ckpt_path = os.path.join(checkpoint_dir, f"step_{step:07d}.pt")
+    if filename:
+        ckpt_path = os.path.join(checkpoint_dir, filename)
+    else:
+        ckpt_path = os.path.join(checkpoint_dir, f"step_{step:07d}.pt")
 
     payload = {
         "step": step,
