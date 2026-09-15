@@ -613,3 +613,49 @@ def dispatch_human_keystrokes(
     """
     return dispatch_typing_payload(text, min_delay_sec=min_delay_sec, max_delay_sec=max_delay_sec)
 
+
+def dispatch_vk_key(vk_code: int, hold_duration: float = 0.05) -> bool:
+    """
+    Dispatches a virtual key code (e.g., VK_RETURN=0x0D, VK_LWIN=0x5B, VK_ESCAPE=0x1B)
+    using Win32 SendInput API with virtual key and scan code mapping.
+    Ensures compatibility with modern UWP apps (SearchHost, Start menu, etc.)
+    which ignore legacy keybd_event calls.
+    """
+    from tools.screen_inspector import _attach_thread_to_default_desktop
+    _attach_thread_to_default_desktop()
+    try:
+        scan_code = user32.MapVirtualKeyW(vk_code, 0)
+        extra = ctypes.c_ulong(0)
+
+        inp_down = INPUT()
+        inp_down.type = INPUT_KEYBOARD
+        inp_down.ki.wVk = vk_code
+        inp_down.ki.wScan = scan_code
+        inp_down.ki.dwFlags = 0
+        inp_down.ki.time = 0
+        inp_down.ki.dwExtraInfo = ctypes.pointer(extra)
+
+        inp_up = INPUT()
+        inp_up.type = INPUT_KEYBOARD
+        inp_up.ki.wVk = vk_code
+        inp_up.ki.wScan = scan_code
+        inp_up.ki.dwFlags = KEYEVENTF_KEYUP
+        inp_up.ki.time = 0
+        inp_up.ki.dwExtraInfo = ctypes.pointer(extra)
+
+        user32.SendInput(1, ctypes.byref(inp_down), ctypes.sizeof(INPUT))
+        time.sleep(max(0.02, hold_duration))
+        user32.SendInput(1, ctypes.byref(inp_up), ctypes.sizeof(INPUT))
+        return True
+    except Exception as exc:
+        print(f"[!] Error dispatching VK 0x{vk_code:02X} via SendInput: {exc}", flush=True)
+        return False
+
+
+def dispatch_enter_key(hold_duration: float = 0.05) -> bool:
+    """
+    Dispatches VK_RETURN (Enter Key, 0x0D) via Win32 SendInput.
+    """
+    return dispatch_vk_key(0x0D, hold_duration=hold_duration)
+
+

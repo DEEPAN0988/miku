@@ -41,7 +41,6 @@ BUILTIN_APPS = {
     "xboxpcappce.exe": "ms-xbox-splash:",
     "xboxpcappadminserver": "ms-xbox-splash:",
     "xboxpcappadminserver.exe": "ms-xbox-splash:",
-    "wuthering waves": r"C:\Program Files\Wuthering Waves\launcher.exe",
 }
 
 
@@ -179,28 +178,29 @@ def find_installed_apps(query: str, limit: int = 5) -> List[Dict[str, str]]:
 
 def find_direct_game_binary(launcher_path: str) -> Optional[str]:
     """
-    If a launcher executable is provided, checks if a direct game binary exists
-    in a sibling or sub-directory (e.g., 'Wuthering Waves Game\\Wuthering Waves.exe').
+    Locates valid executable binary within launcher directory hierarchy (e.g., 'Wuthering Waves Game\\Wuthering Waves.exe').
     """
-    if not launcher_path or not os.path.exists(launcher_path):
+    if not launcher_path:
         return None
-    base_dir = os.path.dirname(launcher_path)
-    base_name = os.path.basename(base_dir).lower()
-    excluded = ("uninst", "clearthirdparty", "crashreport", "unitycrashhandler", "update", "patch")
+    base_dir = launcher_path if os.path.isdir(launcher_path) else os.path.dirname(launcher_path)
+    if not os.path.exists(base_dir):
+        return None
+    excluded = ("uninst", "clearthirdparty", "crashreport", "unitycrashhandler", "update", "patch", "createdump", "hpatchz", "krsdk", "webview")
     candidates = []
     try:
-        for entry in os.listdir(base_dir):
-            sub_path = os.path.join(base_dir, entry)
-            if os.path.isdir(sub_path) and "game" in entry.lower():
-                for f in os.listdir(sub_path):
-                    if f.lower().endswith(".exe") and not any(x in f.lower() for x in excluded):
-                        cand = os.path.join(sub_path, f)
-                        if os.path.isfile(cand):
-                            candidates.append(cand)
+        for root, _, files in os.walk(base_dir):
+            for f in files:
+                cand = os.path.join(root, f)
+                if f.lower().endswith(".exe") and not any(x in f.lower() for x in excluded):
+                    if cand != launcher_path and os.path.isfile(cand):
+                        candidates.append(cand)
         if candidates:
-            # Prioritize candidate that shares words with the base game folder name
             candidates.sort(
-                key=lambda c: len(set(os.path.splitext(os.path.basename(c))[0].lower().split()) & set(base_name.split())),
+                key=lambda c: (
+                    2 if "game" in os.path.dirname(c).lower() else (
+                        1 if "launcher_main" in os.path.basename(c).lower() else 0
+                    )
+                ),
                 reverse=True,
             )
             return candidates[0]
@@ -310,8 +310,17 @@ def launch_app(app_name: str, max_retries: int = 3, retry_delay: float = 0.5) ->
     if not working_dir and os.path.isabs(target_exe):
         working_dir = os.path.dirname(target_exe)
 
-    # Check for direct game binary if target is a launcher
+    # Check for direct game binary if target is a launcher or shortcut
     direct_game_binary = find_direct_game_binary(target_exe)
+    if not direct_game_binary and target_exe:
+        direct_game_binary = find_direct_game_binary(os.path.dirname(target_exe))
+    if not direct_game_binary:
+        for prog_dir in (r"C:\Program Files", r"C:\Program Files (x86)"):
+            app_dir = os.path.join(prog_dir, resolved_name.title())
+            if os.path.exists(app_dir):
+                direct_game_binary = find_direct_game_binary(app_dir)
+                if direct_game_binary:
+                    break
 
     # Tier 1 candidates: If original target is a .lnk, prioritize launching the .lnk
     # because Windows Shell natively resolves all shortcut parameters and working directories.
@@ -348,7 +357,7 @@ def launch_app(app_name: str, max_retries: int = 3, retry_delay: float = 0.5) ->
                     "target": cand,
                     "output": f"Launched application '{resolved_name}' via Windows Shell protocol '{cand}'.",
                 }
-            if _verify_process_alive(cand, min_duration=0.8, expected_image=expected_img):
+            if _verify_process_alive(cand, min_duration=1.5, expected_image=expected_img):
                 return {
                     "status": "SUCCESS",
                     "mode": "DIRECT_STARTFILE",
@@ -379,7 +388,7 @@ def launch_app(app_name: str, max_retries: int = 3, retry_delay: float = 0.5) ->
                 env = os.environ.copy()
                 env["__COMPAT_LAYER"] = "RunAsInvoker"
                 p = subprocess.Popen(cmd, cwd=cand_wd, env=env)
-                if _verify_process_alive(cand, min_duration=0.8, expected_image=expected_img) and p.poll() is None:
+                if _verify_process_alive(cand, min_duration=2.0, expected_image=expected_img) or (p.poll() is None and p.pid > 0):
                     return {
                         "status": "SUCCESS",
                         "mode": "COMPAT_RUNASINVOKER",
