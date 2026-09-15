@@ -330,15 +330,6 @@ def run_autonomous_task_loop(
             }
 
         # Dynamic Action Selection Logic:
-        # Phase 0: Immediate direct launch attempt via app_launcher to bypass UAC prompts cleanly
-        if step_count == 1 and intent["action_type"] == "OPEN_APP":
-            print(f"  [*] Attempting direct UAC-bypassing app launch for '{intent['target_app']}'...")
-            from tools.app_launcher import launch_app
-            l_res = launch_app(intent["target_app"])
-            if l_res.get("success") or l_res.get("status") in ("SUCCESS", "ALREADY_RUNNING"):
-                time.sleep(2.0)
-                continue
-
         # If app result was previously clicked, continuously glide cursor to UAC 'Yes' option and confirm
         if app_result_clicked:
             print("  [*] App result previously clicked; gliding mouse cursor to UAC 'Yes' option...")
