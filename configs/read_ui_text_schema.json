@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "read_screen_text",
+  "description": "Reads text content from a specified UI element, window, or container using Windows UIAutomation accessibility trees without performing hardware manipulation or OCR.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "target": {
+        "type": "string",
+        "description": "The logical name, AutomationId, or window title of the UI element or container to read from the accessibility tree."
+      },
+      "rationale": {
+        "type": "string",
+        "description": "REQUIRED. A concise explanation of why you are inspecting the screen text and what information you intend to retrieve."
+      }
+    },
+    "required": [
+      "target",
+      "rationale"
+    ],
+    "additionalProperties": false
+  }
+}
