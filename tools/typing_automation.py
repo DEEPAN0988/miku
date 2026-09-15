@@ -659,3 +659,37 @@ def dispatch_enter_key(hold_duration: float = 0.05) -> bool:
     return dispatch_vk_key(0x0D, hold_duration=hold_duration)
 
 
+def dispatch_uac_yes_confirmation() -> bool:
+    """
+    Dispatches Left Arrow key (VK_LEFT, 0x25) followed by Enter key (VK_RETURN, 0x0D)
+    and Alt+Y shortcut to automatically confirm 'Yes' on Windows User Account Control (UAC) prompts.
+    """
+    from tools.screen_inspector import _attach_thread_to_default_desktop
+    _attach_thread_to_default_desktop()
+    print("[*] Dispatching UAC 'Yes' confirmation (Left Arrow + Enter / Alt+Y)...", flush=True)
+    # 1. Shift focus from default 'No' to 'Yes' button and press Enter
+    dispatch_vk_key(0x25, hold_duration=0.06)  # VK_LEFT
+    time.sleep(0.08)
+    dispatch_vk_key(0x0D, hold_duration=0.08)  # VK_RETURN
+    time.sleep(0.12)
+    # 2. Alt+Y accelerator backup (VK_MENU=0x12, Y=0x59)
+    try:
+        scan_alt = user32.MapVirtualKeyW(0x12, 0)
+        scan_y = user32.MapVirtualKeyW(0x59, 0)
+        extra = ctypes.c_ulong(0)
+
+        inp1 = INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(wVk=0x12, wScan=scan_alt, dwFlags=0, time=0, dwExtraInfo=ctypes.pointer(extra)))
+        inp2 = INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(wVk=0x59, wScan=scan_y, dwFlags=0, time=0, dwExtraInfo=ctypes.pointer(extra)))
+        inp3 = INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(wVk=0x59, wScan=scan_y, dwFlags=KEYEVENTF_KEYUP, time=0, dwExtraInfo=ctypes.pointer(extra)))
+        inp4 = INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(wVk=0x12, wScan=scan_alt, dwFlags=KEYEVENTF_KEYUP, time=0, dwExtraInfo=ctypes.pointer(extra)))
+
+        user32.SendInput(1, ctypes.byref(inp1), ctypes.sizeof(INPUT))
+        user32.SendInput(1, ctypes.byref(inp2), ctypes.sizeof(INPUT))
+        time.sleep(0.04)
+        user32.SendInput(1, ctypes.byref(inp3), ctypes.sizeof(INPUT))
+        user32.SendInput(1, ctypes.byref(inp4), ctypes.sizeof(INPUT))
+    except Exception:
+        pass
+    return True
+
+

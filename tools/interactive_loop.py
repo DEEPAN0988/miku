@@ -44,6 +44,7 @@ from tools.typing_automation import (
     dispatch_real_typing,
     dispatch_vk_key,
     dispatch_enter_key,
+    dispatch_uac_yes_confirmation,
     REAL_TYPE_ENABLED,
     VALID_EDIT_CONTROL_TYPES,
 )
@@ -332,7 +333,8 @@ def run_autonomous_task_loop(
         # Phase 1: Open Start Menu if not active
         if snap.title not in ("Search", "Start"):
             if app_result_clicked:
-                print("  [*] App result already clicked; awaiting process/window initialization...")
+                print("  [*] App result already clicked; attempting UAC 'Yes' confirmation and awaiting process initialization...")
+                dispatch_uac_yes_confirmation()
                 time.sleep(1.5)
                 continue
 
@@ -454,10 +456,14 @@ def run_autonomous_task_loop(
                 set_window_foreground_passive(snap.hwnd)
                 time.sleep(0.05)
                 dispatch_enter_key(hold_duration=0.08)
+                time.sleep(0.6)
+                dispatch_uac_yes_confirmation()
             else:
                 res_click = simulate_click(snap.hwnd, target_item)
                 if os.environ.get("MIKU_LIVE_EXECUTION", "false").strip().lower() in ("true", "1", "yes"):
                     dispatch_enter_key(hold_duration=0.08)
+                    time.sleep(0.6)
+                    dispatch_uac_yes_confirmation()
             os.environ["MIKU_FAST_CONFIRM_PASSTHROUGH"] = "false"
 
             app_result_clicked = True
