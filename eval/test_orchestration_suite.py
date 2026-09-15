@@ -385,6 +385,42 @@ class TestDeterministicCLI(unittest.TestCase):
     def test_invalid_syntax_returns_none(self):
         self.assertIsNone(self.cli.parse_ui_command("open Notepad and type hello"))
 
+    def test_batch_macro_sequence(self):
+        async def run_test():
+            def mock_input(prompt):
+                return "y"
+
+            mock_nodes = [
+                {"name": "Terminal", "automation_id": "term_1", "control_type": "Pane", "bounds": (10, 10, 100, 100), "center": (55, 55)},
+                {"name": "Explorer", "automation_id": "exp_1", "control_type": "Pane", "bounds": (10, 10, 100, 100), "center": (55, 55)},
+                {"name": "Search", "automation_id": "sch_1", "control_type": "Edit", "bounds": (10, 10, 100, 100), "center": (55, 55)},
+                {"name": "Text Editor", "automation_id": "txt_1", "control_type": "Document", "bounds": (10, 10, 100, 100), "center": (55, 55)},
+            ]
+
+            hl = TargetHighlighter(enabled=False)
+            inspector = TreeInspector(mock_elements=mock_nodes)
+            gate = FastConfirm(input_handler=mock_input, highlighter=hl)
+            executor = ActionDispatch(simulation_mode=True)
+            runner = AgentLoop(inspector=inspector, gate=gate, executor=executor)
+
+            commands = [
+                "click 'Terminal'",
+                "type 'npm install framer-motion\\n' into 'Terminal'",
+                "click 'Explorer'",
+                "type 'tailwind.config.ts\\n' into 'Search'",
+                "click 'Text Editor'",
+                "type '// Update Tailwind config\\n' into 'Text Editor'",
+            ]
+
+            for cmd in commands:
+                task = self.cli.parse_ui_command(cmd)
+                self.assertIsNotNone(task)
+                res = await runner.run_task(task)
+                self.assertEqual(res["status"], "success")
+
+        asyncio.run(run_test())
+
 
 if __name__ == "__main__":
     unittest.main()
+
