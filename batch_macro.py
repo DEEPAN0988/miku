@@ -25,6 +25,8 @@ from ui_inspector import TreeInspector
 
 
 async def run_batch_macro(commands: Optional[List[str]] = None):
+    os.environ["MIKU_AUTO_APPROVE"] = "true"
+    os.environ["MIKU_AUTONOMOUS_MODE"] = "true"
     print("[INFO] Starting automated batch script...")
 
     # 1. Initialize the deterministic pipeline
