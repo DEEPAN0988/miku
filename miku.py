@@ -4,7 +4,7 @@ miku.py — Interactive OS Agent Command-Line Interface (REPL)
 Main interactive entry point for the Miku OS Agent:
   - Uninhibited full autonomous live control: Bézier cursor glides and humanized typing.
   - Interactive REPL loop prompting with 'Miku > '.
-  - Native Inference: Miku v0.3 loaded directly via PyTorch (no pre-trained models)
+  - Native Inference: Miku v0.2 loaded directly via PyTorch (no pre-trained models)
   - Vision Encoder: [NOT YET TRAINED] using Win32 structured text parsing
 """
 
@@ -54,12 +54,12 @@ orchestrator.REAL_TYPE_ENABLED = True
 BANNER = r"""
   __  __ _____ _  ___   _ 
  |  \/  |_   _| |/ / | | |
- | |\/| | | | | ' /| | | |   MIKU OS AGENT — v0.3.5
+ | |\/| | | | | ' /| | | |   MIKU OS AGENT — v0.2
  | |  | |_| |_| . \| |_| |   Autonomous Computer Use & Vision Engine
  |_|  |_|_____|_|\_\\___/    Native In-Process VLM + Multimodal Bridge
 ===============================================================================
  [*] Win32 Humanizer     : ACTIVE (Cubic Bézier Glides & Micro-Delayed Typing)
- [*] Native Inference    : Miku v0.3 loaded directly via PyTorch (no pre-trained models)
+ [*] Native Inference    : Miku v0.2 loaded directly via PyTorch (no pre-trained models)
  [*] Vision Encoder      : [NOT YET TRAINED] using Win32 structured text parsing
  [*] Autonomous Mode     : UNLOCKED (Live Non-Blocking OS Control)
 ===============================================================================
@@ -72,7 +72,7 @@ def print_banner() -> None:
     model = os.environ.get("ASTRA_MODEL", "openai/gpt-6-astra")
     dev, dtype = get_acceleration_device_and_dtype()
 
-    print(" [*] Local Inference     : [ACTIVE] Miku v0.3 (own checkpoint, step 98458)", flush=True)
+    print(" [*] Local Inference     : [ACTIVE] Miku v0.2 (own checkpoint)", flush=True)
     print(" [*] Vision Encoder      : [NOT YET TRAINED] Win32 structured text fallback", flush=True)
 
     # Eagerly load & cache Miku model at startup to avoid cold-start on first command

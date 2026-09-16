@@ -71,7 +71,7 @@ def run_master_controller(
 ):
     setup_environment()
     print("=" * 80)
-    print(" MIKU MASTER AUTONOMOUS CONTROLLER v0.3")
+    print(" MIKU MASTER AUTONOMOUS CONTROLLER v0.2")
     print(" Zero-Cloud API | Direct Win32 Kernel & UIA Automation | Fully Local")
     print("=" * 80)
 

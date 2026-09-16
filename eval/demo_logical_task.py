@@ -29,7 +29,7 @@ from cli_macro_engine import DeterministicCLI
 
 async def run_logical_task_pipeline():
     print("\n==========================================================================================")
-    print(" MIKU OS v0.3 — MULTI-STEP LOGICAL TASK EXECUTION PIPELINE")
+    print(" MIKU OS v0.2 — MULTI-STEP LOGICAL TASK EXECUTION PIPELINE")
     print("==========================================================================================")
 
     mock_nodes = [

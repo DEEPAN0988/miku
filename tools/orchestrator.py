@@ -1,5 +1,5 @@
 """
-tools/orchestrator.py — Compound Action Engine & Pipeline State Machine (Phase 14 / v0.3.5)
+tools/orchestrator.py — Compound Action Engine & Pipeline State Machine (Phase 14 / v0.2)
 
 Architectural Role:
   Chains primitive desktop automation tools into autonomous multi-step execution pipelines:

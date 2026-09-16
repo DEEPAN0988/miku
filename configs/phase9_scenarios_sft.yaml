@@ -1,5 +1,5 @@
 # MIKU Phase 9 - Real-Time Working Scenarios & Computer Use SFT Configuration
-# Fine-tunes canonical Phase 8 v0.3 checkpoint on Computer Use action schemas + 2:1 conversational replay
+# Fine-tunes canonical Phase 8 v0.2 checkpoint on Computer Use action schemas + 2:1 conversational replay
 
 model:
   preset: tiny

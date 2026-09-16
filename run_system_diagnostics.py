@@ -1,7 +1,7 @@
 """
-run_system_diagnostics.py — Master Real-Time System Diagnostics for Miku OS v0.3
+run_system_diagnostics.py — Master Real-Time System Diagnostics for Miku OS v0.2
 
-Executes physical, real-time tests across all v0.3 subsystems on the local Windows OS:
+Executes physical, real-time tests across all v0.2 subsystems on the local Windows OS:
 1. Environment Setup: MIKU_LIVE_EXECUTION=true, MIKU_AUTONOMOUS_MODE=true, OPENAI_API_KEY unset.
 2. Test 1: Vision & GDI Pipeline Latency (BitBlt capture < 100ms, data:image/png;base64,).
 3. Test 2: Safe File Lifecycle (SHFileOperation Recycle Bin deletion of miku_diagnostic_dummy.txt).
@@ -281,7 +281,7 @@ def main() -> int:
     ]
 
     print("\n" + "=" * 90, flush=True)
-    print(f" {C_BOLD}{C_CYAN}MIKU OS v0.3 — MASTER REAL-TIME SYSTEM DIAGNOSTICS{C_RESET}", flush=True)
+    print(f" {C_BOLD}{C_CYAN}MIKU OS v0.2 — MASTER REAL-TIME SYSTEM DIAGNOSTICS{C_RESET}", flush=True)
     print("=" * 90, flush=True)
     print(f" [*] Autonomous Unlock : {C_GREEN}ACTIVE{C_RESET} (MIKU_LIVE_EXECUTION=true, MIKU_AUTONOMOUS_MODE=true)", flush=True)
     print(f" [*] Mode              : {C_YELLOW}LOCAL OFFLINE (OPENAI_API_KEY explicitly unset){C_RESET}", flush=True)

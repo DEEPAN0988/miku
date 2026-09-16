@@ -41,7 +41,7 @@ screen_inspector.REAL_CLICK_ENABLED = False
 orchestrator.REAL_CLICK_ENABLED = False
 
 print("[*] ===================================================================", flush=True)
-print("[*] MIKU OS AGENT — CANARY DRY RUN (v0.3 Astra Vision Translation Layer)", flush=True)
+print("[*] MIKU OS AGENT — CANARY DRY RUN (v0.2 Astra Vision Translation Layer)", flush=True)
 print("[*] ===================================================================", flush=True)
 print("[*] [SAFETY] Enforcing Triple Circuit Breaker: REAL_CLICK_ENABLED = False", flush=True)
 print("[*] [SAFETY] All click actions are strictly restricted to simulation dry-run.", flush=True)

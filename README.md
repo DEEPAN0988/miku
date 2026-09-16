@@ -504,7 +504,7 @@ Both highest-stakes automation modules feature permanently hardcoded, fail-close
 
 ### 4. Consolidated BM25 Re-Audit Findings (Honoring Phase 10 Commitment)
 
-Re-evaluating BM25 lexical scaling across all 20 registered tools across 46 total test cases ([eval/audit_bm25_v03_scaling.py](file:///c:/miku/eval/audit_bm25_v03_scaling.py)):
+Re-evaluating BM25 lexical scaling across all 20 registered tools across 46 total test cases:
 
 | Metric / Evaluation Cluster | Phase 10 (17 Tools, N=30) | Current v0.3 (20 Tools, N=46) | Delta / Finding |
 | :--- | :--- | :--- | :--- |

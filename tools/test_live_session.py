@@ -39,7 +39,7 @@ def main():
     model.load_state_dict(state)
     model.eval()
 
-    print("[TEST] MIKU v0.3 Phase 8 Loaded Successfully.")
+    print("[TEST] MIKU v0.2 Phase 8 Loaded Successfully.")
     print("=" * 70)
 
     test_queries = [

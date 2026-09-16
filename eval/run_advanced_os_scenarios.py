@@ -301,7 +301,7 @@ def create_advanced_deterministic_runner(scenario_num: int, desktop_dir: Path) -
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Miku OS v0.3 — Advanced OS Evaluation Scenarios")
+    parser = argparse.ArgumentParser(description="Miku OS v0.2 — Advanced OS Evaluation Scenarios")
     parser.add_argument("--scenario", choices=["1", "2", "3", "all"], default="all", help="Evaluation scenario to run")
     parser.add_argument("--force-offline", action="store_true", help="Force deterministic offline model runner")
     parser.add_argument("--real", action="store_true", help="Execute live Win32 inputs (Bézier mouse glides and keystrokes)")
@@ -326,7 +326,7 @@ def main() -> int:
     has_api_key = bool(os.environ.get("OPENAI_API_KEY")) and not args.force_offline
 
     print("\n" + "=" * 90, flush=True)
-    print(f" {C_BOLD}{C_CYAN}MIKU OS v0.3 — ADVANCED REAL-WORLD OS SCENARIO EVALUATION{C_RESET}", flush=True)
+    print(f" {C_BOLD}{C_CYAN}MIKU OS v0.2 — ADVANCED REAL-WORLD OS SCENARIO EVALUATION{C_RESET}", flush=True)
     print("=" * 90, flush=True)
     print(f" [*] Autonomous Unlock : {C_GREEN}ACTIVE{C_RESET} (MIKU_LIVE_EXECUTION=true, MIKU_AUTONOMOUS_MODE=true)", flush=True)
     print(f" [*] Real Execution    : {C_GREEN if is_real else C_YELLOW}{'LIVE WIN32 (Bézier + Typing)' if is_real else 'SIMULATION'}{C_RESET}", flush=True)

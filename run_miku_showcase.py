@@ -1,5 +1,5 @@
 """
-run_miku_showcase.py — Full Interactive Capability Showcase for MIKU OS v0.3
+run_miku_showcase.py — Full Interactive Capability Showcase for MIKU OS v0.2
 
 Demonstrates MIKU's complete suite of hardware-accelerated, 100% offline capabilities:
 1. Live Real-Time Win32 Subsystem Diagnostics (<40ms latency)
@@ -36,7 +36,7 @@ def showcase():
     ta.REAL_TYPE_ENABLED = True
 
     print("=" * 80)
-    print(" MIKU OS v0.3 — COMPLETE AUTONOMOUS SHOWCASE & CAPABILITY DEMO")
+    print(" MIKU OS v0.2 — COMPLETE AUTONOMOUS SHOWCASE & CAPABILITY DEMO")
     print(" 100% Local | Zero-Cloud API | Hardware-Aware CUDA & Win32 Kernel Engine")
     print("=" * 80)
 

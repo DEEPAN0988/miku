@@ -1,5 +1,5 @@
 """
-eval/run_computer_use_benchmarks.py — Multi-Tier Computer Use Benchmarks (v0.3 / gpt-6-astra)
+eval/run_computer_use_benchmarks.py — Multi-Tier Computer Use Benchmarks (v0.2 / gpt-6-astra)
 
 Executes and verifies the three canonical Computer Use evaluation benchmarks:
   Tier 1: The Cross-App Data Transfer (Easy) — Calculator -> Clipboard -> Notepad -> math_result.txt
@@ -300,7 +300,7 @@ def create_deterministic_runner(tier: int, desktop_dir: Path) -> Callable[[Dict[
 # ==============================================================================
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Miku OS v0.3 — Computer Use Benchmark Evaluation Suite")
+    parser = argparse.ArgumentParser(description="Miku OS v0.2 — Computer Use Benchmark Evaluation Suite")
     parser.add_argument("--tier", choices=["1", "2", "3", "all"], default="all", help="Evaluation Tier to execute")
     parser.add_argument("--force-offline", action="store_true", help="Force deterministic offline model runner")
     parser.add_argument("--real", action="store_true", help="Execute live Win32 inputs (Bézier mouse glides and keystrokes)")
@@ -325,7 +325,7 @@ def main() -> int:
     has_api_key = bool(os.environ.get("OPENAI_API_KEY")) and not args.force_offline
 
     print("\n" + "=" * 90, flush=True)
-    print(f" {C_BOLD}{C_CYAN}MIKU OS v0.3 — GENERALIZED COMPUTER USE BENCHMARK SUITE{C_RESET}", flush=True)
+    print(f" {C_BOLD}{C_CYAN}MIKU OS v0.2 — GENERALIZED COMPUTER USE BENCHMARK SUITE{C_RESET}", flush=True)
     print("=" * 90, flush=True)
     print(f" [*] Autonomous Unlock : {C_GREEN}ACTIVE{C_RESET} (MIKU_LIVE_EXECUTION=true, MIKU_AUTONOMOUS_MODE=true)", flush=True)
     print(f" [*] Real Execution    : {C_GREEN if is_real else C_YELLOW}{'LIVE WIN32 (Bézier + Typing)' if is_real else 'SIMULATION'}{C_RESET}", flush=True)

@@ -1,5 +1,5 @@
 """
-train/prepare_scenario_data.py — SFT Dataset Generator for Computer Use & Real-Time Scenarios (Phase 9 / v0.3)
+train/prepare_scenario_data.py — SFT Dataset Generator for Computer Use & Real-Time Scenarios (Phase 9 / v0.2)
 
 Synthesizes multi-step computer use action sequences mapped to Miku's JSON schema:
   - Scenario 1: OS Settings Navigation & Dark Mode Toggle
