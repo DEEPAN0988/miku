@@ -37,7 +37,7 @@ from model.tokenizer import MikuTokenizer
 # Default paths
 # ---------------------------------------------------------------------------
 
-DEFAULT_CHECKPOINT_DIR = os.path.join(REPO_ROOT, "checkpoints", "phase9_v03_2h_unified")
+DEFAULT_CHECKPOINT_DIR = os.path.join(REPO_ROOT, "checkpoints", "phase5b_diversified_sft")
 DEFAULT_TOKENIZER_PREFIX = os.path.join(REPO_ROOT, "data", "processed", "tokenizer", "miku_bpe")
 
 # ---------------------------------------------------------------------------

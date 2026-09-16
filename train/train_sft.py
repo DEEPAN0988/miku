@@ -348,7 +348,7 @@ def train_sft(args: argparse.Namespace) -> None:
             break
 
     # Save final canonical checkpoint
-    canonical_path = ckpt_dir / "canonical_v03_unified.pt"
+    canonical_path = ckpt_dir / "canonical_sft.pt"
     val_loss_final = compute_val_loss(model, val_loader, device, dtype, max_batches=30)
     samples_final = generate_samples(model, tok, sample_prompts, device)
     save_checkpoint(
@@ -360,7 +360,7 @@ def train_sft(args: argparse.Namespace) -> None:
         checkpoint_dir=str(ckpt_dir),
         val_loss=val_loss_final,
         samples=samples_final,
-        filename="canonical_v03_unified.pt",
+        filename="canonical_sft.pt",
     )
 
     print(f"\n[SFT] Training finished at step {step} (total elapsed: {(time.time() - t_start)/3600:.2f}h).")

@@ -25,8 +25,8 @@ from memory.retriever import MemoryRetriever
 from memory.storage import MikuMemoryStore
 
 
-DEFAULT_CHECKPOINT = "checkpoints/phase9_v03_2h_unified/canonical_v03_unified.pt"
-DEFAULT_CONFIG = "configs/phase9_v03_2h_unified.yaml"
+DEFAULT_CHECKPOINT = "checkpoints/phase5b_diversified_sft/canonical_diversified_sft.pt"
+DEFAULT_CONFIG = "configs/phase5b_diversified_sft.yaml"
 DEFAULT_TOKENIZER = "data/processed/tokenizer/miku_bpe"
 
 

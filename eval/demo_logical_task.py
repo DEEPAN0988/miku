@@ -111,8 +111,8 @@ async def run_logical_task_pipeline():
         TaskSpec(
             action_type="type",
             target_name="Explorer Search",
-            payload="configs/phase9_v03_2h_unified.yaml\n",
-            rationale="Searching for SFT unified pipeline configuration.",
+            payload="configs/phase5b_diversified_sft.yaml\n",
+            rationale="Searching for SFT pipeline configuration.",
         ),
     ]
 
