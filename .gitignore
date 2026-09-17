@@ -6,4 +6,5 @@ __pycache__/
 *.pth
 *.pkl
 *.wav
+data/
 .pytest_cache/

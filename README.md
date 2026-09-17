@@ -35,6 +35,7 @@ c:\miku/
 ├── wakeword/         # Custom PyTorch CNN keyword spotter ("Hey Miku") trained from scratch
 ├── asr/              # Offline acoustic DTW template matcher for voice commands
 ├── tts/              # Offline speech synthesis engine (Windows SAPI5 / pyttsx3)
+├── llm/              # Custom Causal Transformer LLM (855K params) trained from scratch
 ├── nlu/              # Hybrid pattern matching + trainable TF-IDF Naive Bayes classifier
 ├── planner/          # Day scheduling, task planner, and SQLite database persistence
 ├── connect/          # Bluetooth & Wi-Fi device discovery with strict pairing consent

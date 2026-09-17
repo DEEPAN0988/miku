@@ -43,6 +43,10 @@ class NLUEngine:
         intent, conf = self.classifier.predict(clean_text)
         entities = {}
         
+        # If classifier confidence is low, mark as unknown so LLM can answer
+        if conf < 0.38:
+            intent = "unknown"
+
         # Simple heuristic entity extraction for fallback
         lower = clean_text.lower()
         if intent == "launch_app":

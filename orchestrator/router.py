@@ -18,6 +18,7 @@ from planner.engine import PlannerEngine
 from connect.manager import ConnectManager
 from vision.engine import VisionEngine
 from tts.engine import TTSEngine
+from llm.generator import MikuLLM
 from .dialogue import DialogueManager
 
 
@@ -31,6 +32,7 @@ class Orchestrator:
         self.connect = ConnectManager()
         self.vision = VisionEngine()
         self.tts = TTSEngine() if tts_enabled else None
+        self.llm = MikuLLM()
 
     def respond(self, message: str, speak: bool = True) -> str:
         """Log, speak (if enabled), and return response string."""
@@ -215,12 +217,18 @@ class Orchestrator:
             msg = self.respond(summary)
             return {"success": True, "data": res, "response": msg}
 
-        # 11. Unknown / Low-Confidence Fallback
+        # 11. LLM Conversational Generation for General Queries
+        if len(raw_text.strip()) >= 3 and not any(k in raw_text.lower() for k in ["delete", "remove", "kill"]):
+            gen_reply = self.llm.generate(raw_text)
+            if gen_reply and len(gen_reply) > 6:
+                msg = self.respond(gen_reply)
+                return {"success": True, "intent": "llm_chat", "response": msg}
+
         conf = nlu_result.get("confidence", 0.0)
         if conf < 0.40 or len(raw_text.strip()) <= 2:
             msg = self.respond("I didn't quite catch that. Could you please repeat?")
         else:
-            msg = self.respond(f"I heard: '{raw_text}', but I don't have a specific action assigned for this yet. Say 'help' to see what I can do.")
+            msg = self.respond(f"I heard: '{raw_text}'. Say 'help' to see my available commands.")
         return {"success": False, "intent": intent, "response": msg}
 
     def _handle_compositional_write(self, app: str, doc_type: str, topic: str) -> Dict[str, Any]:
