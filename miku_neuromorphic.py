@@ -226,13 +226,20 @@ class ExecutableMemory:
                 self.PAGE_EXECUTE_READWRITE
             )
         else:
-            # POSIX mmap
+            # POSIX mmap (Linux / macOS)
             import mmap
+            map_private = getattr(mmap, "MAP_PRIVATE", 0x02)
+            map_anonymous = getattr(mmap, "MAP_ANONYMOUS", 0x20)
+            prot_rwx = (
+                getattr(mmap, "PROT_READ", 0x1)
+                | getattr(mmap, "PROT_WRITE", 0x2)
+                | getattr(mmap, "PROT_EXEC", 0x4)
+            )
             self.mmap_obj = mmap.mmap(
                 -1,
                 self.size,
-                flags=mmap.MAP_PRIVATE | mmap.MAP_ANONYMOUS,
-                prot=mmap.PROT_READ | mmap.PROT_WRITE | mmap.PROT_EXEC
+                flags=map_private | map_anonymous,
+                prot=prot_rwx
             )
             self.ptr = ctypes.c_void_p.from_buffer(self.mmap_obj).value
 
