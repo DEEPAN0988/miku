@@ -59,17 +59,28 @@ class Orchestrator:
                 msg = self.respond("Action cancelled. No changes were made.")
                 return {"success": True, "action": "cancelled", "response": msg}
 
+        # 1.2 Sub-Millisecond Human Conversational Reflex Layer (Empathy, Banter, Memory)
+        reflex = self.dialogue.get_human_reflex(raw_text)
+        if reflex:
+            self.dialogue.record_turn(raw_text, "conversational_reflex", reflex)
+            msg = self.respond(reflex)
+            return {"success": True, "intent": "conversational_reflex", "response": msg}
+
         # 1.5 Conversational & Helper Intents
         if intent == "greeting":
-            msg = self.respond("Hello! I am Miku, your offline personal assistant. What would you like to do?")
+            name_greet = f"Hello, {self.dialogue.user_name}!" if self.dialogue.user_name else "Hello!"
+            msg = self.respond(f"{name_greet} I am Miku, your offline personal assistant. What would you like to do?")
+            self.dialogue.record_turn(raw_text, intent, msg)
             return {"success": True, "response": msg}
 
         if intent == "identity":
             msg = self.respond("I am Miku, an offline-first AI voice assistant running locally on your PC without external API keys or cloud models.")
+            self.dialogue.record_turn(raw_text, intent, msg)
             return {"success": True, "response": msg}
 
         if intent == "status_query":
             msg = self.respond("I am online, listening, and ready for your commands.")
+            self.dialogue.record_turn(raw_text, intent, msg)
             return {"success": True, "response": msg}
 
         if intent == "help":
@@ -221,6 +232,7 @@ class Orchestrator:
         if len(raw_text.strip()) >= 3 and not any(k in raw_text.lower() for k in ["delete", "remove", "kill"]):
             gen_reply = self.llm.generate(raw_text)
             if gen_reply and len(gen_reply) > 6:
+                self.dialogue.record_turn(raw_text, "llm_chat", gen_reply)
                 msg = self.respond(gen_reply)
                 return {"success": True, "intent": "llm_chat", "response": msg}
 

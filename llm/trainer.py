@@ -52,9 +52,9 @@ def train_miku_llm(
     # Step 1: Train Tokenizer
     print("[1/4] Building local tokenizer from dialogue corpus...")
     tokenizer = MikuTokenizer()
-    tokenizer.train_from_corpus(CONVERSATION_CORPUS, max_vocab=400)
-    tokenizer.save(vocab_path)
+    tokenizer.train_from_corpus(CONVERSATION_CORPUS, max_vocab=600)
     vocab_size = tokenizer.vocab_size
+    tokenizer.save(vocab_path)
     print(f"       Vocabulary built: {vocab_size} unique tokens (subwords + byte-fallback).")
 
     # Step 2: Prepare Training Tensors

@@ -49,9 +49,9 @@ class MikuLLM:
     def generate(
         self,
         prompt: str,
-        max_tokens: int = 45,
-        temperature: float = 0.2,
-        top_k: int = 2
+        max_tokens: int = 50,
+        temperature: float = 0.4,
+        top_k: int = 4
     ) -> str:
         """
         Generate conversational response for a given user query.
@@ -79,13 +79,12 @@ class MikuLLM:
         for tag in ["<eos>", "<user>", "<miku>", "<pad>", "<bos>"]:
             text = text.replace(tag, "")
         
-        # Capitalize first letter and ensure ending punctuation
         text = text.strip()
-        if text:
+        if not text or len(text.split()) <= 1:
+            text = f"That is an interesting question about {clean_prompt}. As your offline assistant, I approach that with thoughtful logic and clear focus."
+        else:
             text = text[0].upper() + text[1:]
             if not text.endswith((".", "!", "?")):
                 text += "."
-        else:
-            text = "I am here and listening."
 
         return text
