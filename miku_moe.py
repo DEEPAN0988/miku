@@ -74,13 +74,11 @@ class SparseMoE(nn.Module):
         # Buffer to track the last computed auxiliary load balancing loss
         self.current_aux_loss: torch.Tensor = torch.tensor(0.0)
 
-    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor, return_aux: bool = False):
         """
         Args:
             x: Input tensor of shape (B, T, d_model)
-        Returns:
-            out: Combined expert output of shape (B, T, d_model)
-            aux_loss: Scalar auxiliary load balancing loss
+            return_aux: If True, returns (out, aux_loss). Otherwise returns out.
         """
         B, T, C = x.shape
         flat_x = x.reshape(-1, C)  # (N, d_model) where N = B * T
@@ -92,46 +90,37 @@ class SparseMoE(nn.Module):
 
         # 2. Top-k Expert Selection
         top_weights, top_indices = torch.topk(router_logits, self.top_k, dim=-1)  # (N, k)
-        # Normalize top-k weights
         top_weights = F.softmax(top_weights, dim=-1)  # (N, k)
 
         # 3. Auxiliary Load-Balancing Loss to Prevent Expert Collapse
-        # f_i: fraction of tokens routed to expert i
         expert_mask = F.one_hot(top_indices, num_classes=self.num_experts).sum(dim=1)  # (N, num_experts)
         tokens_per_expert = expert_mask.float().sum(dim=0)  # (num_experts,)
         f_i = tokens_per_expert / (N * self.top_k)
-
-        # P_i: average probability mass routed to expert i
         P_i = router_probs.mean(dim=0)  # (num_experts,)
 
-        # L_aux = num_experts * sum(f_i * P_i)
         aux_loss = self.aux_loss_coeff * (self.num_experts * torch.sum(f_i * P_i))
         self.current_aux_loss = aux_loss
 
         # 4. Token-Selective Expert Computation
-        # Accumulate output: y = sum_{k} w_k * Expert_k(x)
         final_output = torch.zeros_like(flat_x)
 
-        # Process each expert only on tokens routed to it
         for expert_idx in range(self.num_experts):
-            # Find tokens where this expert was selected in top_k
-            # match_mask: shape (N, k)
             match_mask = (top_indices == expert_idx)
             if not match_mask.any():
                 continue
 
-            # Token indices and corresponding k-rank
             token_idx, k_idx = torch.where(match_mask)
             selected_tokens = flat_x[token_idx]  # (M, d_model)
 
-            # Forward pass ONLY through this expert
             expert_out = self.experts[expert_idx](selected_tokens)  # (M, d_model)
             weights = top_weights[token_idx, k_idx].unsqueeze(-1)  # (M, 1)
 
-            # Weighted accumulation using index_add_
             final_output.index_add_(0, token_idx, expert_out * weights)
 
-        return final_output.reshape(B, T, C), aux_loss
+        out = final_output.reshape(B, T, C)
+        if return_aux:
+            return out, aux_loss
+        return out
 
 
 def replace_ffn_with_moe(

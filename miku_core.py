@@ -466,8 +466,9 @@ class MemoryState:
         async with self._lock:
             self._context.append({"role": role, "content": content})
             if len(self._context) > self.max_items:
-                # If slot 0 is system_telemetry, pop slot 1 to preserve ambient telemetry at index 0
-                pop_idx = 1 if (self._context and self._context[0].get("role") == "system_telemetry") else 0
+                # Preserve fixed telemetry header slots (system_telemetry & visual_telemetry)
+                prefix_len = sum(1 for item in self._context[:2] if item.get("role") in ("system_telemetry", "visual_telemetry"))
+                pop_idx = prefix_len if len(self._context) > prefix_len else 0
                 self._context.pop(pop_idx)
 
     async def get_context(self) -> List[Dict[str, str]]:

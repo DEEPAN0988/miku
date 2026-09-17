@@ -118,13 +118,27 @@ def inject_lora(
             block.attn.out_proj = LinearLoRA(block.attn.out_proj, r=r, alpha=alpha)
             trainable_params.extend([block.attn.out_proj.lora_A, block.attn.out_proj.lora_B])
 
-        if isinstance(block.mlp[0], nn.Linear):
-            block.mlp[0] = LinearLoRA(block.mlp[0], r=r, alpha=alpha)
-            trainable_params.extend([block.mlp[0].lora_A, block.mlp[0].lora_B])
-
-        if isinstance(block.mlp[2], nn.Linear):
-            block.mlp[2] = LinearLoRA(block.mlp[2], r=r, alpha=alpha)
-            trainable_params.extend([block.mlp[2].lora_A, block.mlp[2].lora_B])
+        # Handle MLP: Sequential vs SparseMoE
+        if isinstance(block.mlp, nn.Sequential):
+            if isinstance(block.mlp[0], nn.Linear):
+                block.mlp[0] = LinearLoRA(block.mlp[0], r=r, alpha=alpha)
+                trainable_params.extend([block.mlp[0].lora_A, block.mlp[0].lora_B])
+            if isinstance(block.mlp[2], nn.Linear):
+                block.mlp[2] = LinearLoRA(block.mlp[2], r=r, alpha=alpha)
+                trainable_params.extend([block.mlp[2].lora_A, block.mlp[2].lora_B])
+        elif hasattr(block.mlp, "router") and isinstance(block.mlp.router, nn.Linear):
+            # SparseMoE: wrap router and expert linear layers
+            block.mlp.router = LinearLoRA(block.mlp.router, r=r, alpha=alpha)
+            trainable_params.extend([block.mlp.router.lora_A, block.mlp.router.lora_B])
+            if hasattr(block.mlp, "experts"):
+                for exp in block.mlp.experts:
+                    if hasattr(exp, "net") and isinstance(exp.net, nn.Sequential):
+                        if isinstance(exp.net[0], nn.Linear):
+                            exp.net[0] = LinearLoRA(exp.net[0], r=r, alpha=alpha)
+                            trainable_params.extend([exp.net[0].lora_A, exp.net[0].lora_B])
+                        if isinstance(exp.net[2], nn.Linear):
+                            exp.net[2] = LinearLoRA(exp.net[2], r=r, alpha=alpha)
+                            trainable_params.extend([exp.net[2].lora_A, exp.net[2].lora_B])
 
     return trainable_params
 
