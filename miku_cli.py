@@ -1,7 +1,7 @@
 """
 Miku — Offline-First Personal AI Voice Assistant.
 Interactive Console & Real-Time Voice Hearing Interface.
-Features live terminal hearing animation, VAD, and offline NLU execution.
+Features live terminal hearing animation, VAD, and offline NLU execution with Female Voice.
 Zero external API keys, zero pretrained black-box models.
 """
 
@@ -10,6 +10,10 @@ import os
 import argparse
 import time
 import numpy as np
+
+# Ensure UTF-8 output on Windows consoles
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 # Ensure project root is in sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -30,25 +34,29 @@ def print_banner():
       |_|  |_|___|_|\_\\___/ /_/   \_\____|___|
       
     Offline-First Personal Voice Assistant (Windows Phase 1)
-    * Zero Cloud API Keys  * Zero Pretrained Models
-    * 100% Local Inference * Privacy-First Operation
+    * Female Voice (Microsoft Zira)  * Zero Pretrained Models
+    * Zero Cloud API Keys            * 100% Local Inference
 ============================================================
 """
     print(banner)
 
 
-def render_equalizer(rms: float, max_bars: int = 12) -> str:
-    """Generate dynamic visual equalizer string based on audio energy."""
-    # Scale RMS (normal speech is ~0.01 - 0.20)
-    level = min(1.0, max(0.0, rms * 15.0))
-    filled = int(level * max_bars)
-    bar = "▰" * filled + "▱" * (max_bars - filled)
+def render_equalizer(rms: float, max_bars: int = 16) -> str:
+    """Generate dynamic visual equalizer string based on logarithmic decibel scale."""
+    # Convert RMS to dB: -65 dB (near silence) to -15 dB (loud voice)
+    db = 20.0 * np.log10(max(rms, 1e-6))
+    level = max(0.0, min(1.0, (db + 65.0) / 50.0))
     
-    # Animated wave glyphs
-    waves = [" ", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
-    wave_idx = min(len(waves) - 1, int(level * len(waves)))
-    wave_str = waves[wave_idx] * 4
-    return f"[{bar}] {wave_str} (Vol: {int(level * 100):2d}%)"
+    filled = int(level * max_bars)
+    bar = "|" * filled + "." * (max_bars - filled)
+    pct = int(level * 100)
+    
+    # Dynamic wave animation
+    waves = [" ", " ", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
+    w_idx = min(len(waves) - 1, int(level * len(waves)))
+    wave_str = waves[w_idx] * 4
+
+    return f"[{bar}] {wave_str} (Vol: {pct:2d}%)"
 
 
 def run_interactive_text(orchestrator: Orchestrator, nlu: NLUEngine):
@@ -84,13 +92,41 @@ def run_interactive_text(orchestrator: Orchestrator, nlu: NLUEngine):
             break
 
 
-def run_voice_loop(orchestrator: Orchestrator, nlu: NLUEngine, wakeword: WakeWordEngine, asr: ASREngine, require_wake_word: bool = False):
+def run_test_mic(device_index: int = None):
+    """Real-time 10-second microphone test with visual audio meter."""
+    try:
+        import sounddevice as sd
+    except Exception as e:
+        print(f"Cannot initialize sounddevice: {e}")
+        return
+
+    sample_rate = 16000
+    chunk_size = int(0.08 * sample_rate)
+
+    dev_info = sd.query_devices(device_index, 'input') if device_index is not None else sd.query_devices(kind='input')
+    dev_name = dev_info['name']
+    print(f"\n[Microphone Test Active]")
+    print(f"Device: '{dev_name}' (16kHz Mono)")
+    print("Speak or tap your mic to observe volume meter response.")
+    print("Running for 10 seconds (or press Ctrl+C to stop)...\n")
+
+    start_time = time.time()
+    try:
+        with sd.InputStream(samplerate=sample_rate, channels=1, dtype='float32', device=device_index) as stream:
+            while time.time() - start_time < 10.0:
+                data, _ = stream.read(chunk_size)
+                rms = float(np.sqrt(np.mean(data.flatten() ** 2)))
+                eq = render_equalizer(rms, max_bars=20)
+                remaining = int(10.0 - (time.time() - start_time))
+                sys.stdout.write(f"\r🎤 [Mic Signal] {eq}  Remaining: {remaining}s   ")
+                sys.stdout.flush()
+        print("\n\n[Mic Test Complete] Audio input stream verified successfully.")
+    except KeyboardInterrupt:
+        print("\n\n[Mic Test Stopped]")
+
+
+def run_voice_loop(orchestrator: Orchestrator, nlu: NLUEngine, wakeword: WakeWordEngine, asr: ASREngine, device_index: int = None):
     print("\n[Miku Voice Mode Active]")
-    if require_wake_word:
-        print("Say 'Hey Miku' to trigger listening.")
-    else:
-        print("Speak naturally into your microphone (or say 'Hey Miku').")
-    print("Live hearing monitor active. Press Ctrl+C to return to menu.\n")
 
     try:
         import sounddevice as sd
@@ -100,27 +136,42 @@ def run_voice_loop(orchestrator: Orchestrator, nlu: NLUEngine, wakeword: WakeWor
         return
 
     sample_rate = 16000
-    chunk_size = int(0.08 * sample_rate)  # 80ms per tick for fast 12 FPS animation
-    speech_threshold = 0.008
+    chunk_size = int(0.08 * sample_rate)  # 80ms per tick
 
+    dev_info = sd.query_devices(device_index, 'input') if device_index is not None else sd.query_devices(kind='input')
+    dev_name = dev_info['name']
+    print(f"Active Microphone: '{dev_name}'")
+    print("Calibrating ambient room noise...")
+
+    # Ambient Noise Calibration (0.4s)
     try:
-        with sd.InputStream(samplerate=sample_rate, channels=1, dtype='float32') as stream:
+        with sd.InputStream(samplerate=sample_rate, channels=1, dtype='float32', device=device_index) as stream:
+            ambient_samples = []
+            for _ in range(5):
+                data, _ = stream.read(chunk_size)
+                ambient_samples.append(float(np.sqrt(np.mean(data.flatten() ** 2))))
+            ambient_floor = max(1e-5, float(np.mean(ambient_samples)))
+            speech_threshold = max(0.0003, ambient_floor * 2.2)
+            
+            print(f"Calibration Complete: Ambient Floor={ambient_floor:.6f}, Trigger Threshold={speech_threshold:.6f}")
+            print("\nSpeak your command into the microphone (e.g. 'hi', 'what is the time', 'plan my day').")
+            print("Live hearing monitor active. Press Ctrl+C to stop.\n")
+
             while True:
-                # 1. Idle listening state with live animation
                 frames = []
                 is_recording = False
                 silence_frames = 0
-                max_silence_frames = int(1.1 / 0.08)  # ~1.1s of silence to finish command
-                max_speech_frames = int(7.0 / 0.08)   # 7 seconds max utterance
+                max_silence_frames = int(1.0 / 0.08)  # ~1.0s silence to finish command
+                max_speech_frames = int(7.0 / 0.08)   # 7 seconds max
 
-                # Listen until speech or wake word is heard
+                # 1. Idle listening state
                 while not is_recording:
                     data, _ = stream.read(chunk_size)
                     chunk = data.flatten()
                     rms = float(np.sqrt(np.mean(chunk ** 2)))
                     eq = render_equalizer(rms)
 
-                    sys.stdout.write(f"\r👂 [Listening] {eq}  Say command or 'Hey Miku'...   ")
+                    sys.stdout.write(f"\r👂 [Listening] {eq}  Speak command...   ")
                     sys.stdout.flush()
 
                     if rms > speech_threshold:
@@ -128,7 +179,7 @@ def run_voice_loop(orchestrator: Orchestrator, nlu: NLUEngine, wakeword: WakeWor
                         frames.append(chunk)
                         break
 
-                # 2. Recording command with hearing animation
+                # 2. Recording speech state
                 sys.stdout.write("\r" + " " * 80 + "\r")
                 while is_recording:
                     data, _ = stream.read(chunk_size)
@@ -137,7 +188,7 @@ def run_voice_loop(orchestrator: Orchestrator, nlu: NLUEngine, wakeword: WakeWor
                     frames.append(chunk)
 
                     eq = render_equalizer(rms)
-                    sys.stdout.write(f"\r🎙️ [HEARING SPEECH] {eq} Recording command...   ")
+                    sys.stdout.write(f"\r🎙️ [HEARING SPEECH] {eq} Recording... (pause to finish)   ")
                     sys.stdout.flush()
 
                     if rms < speech_threshold:
@@ -150,27 +201,33 @@ def run_voice_loop(orchestrator: Orchestrator, nlu: NLUEngine, wakeword: WakeWor
                     if len(frames) >= max_speech_frames:
                         is_recording = False
 
-                # 3. Process captured audio
+                # 3. Process & Transcribe
                 sys.stdout.write("\r" + " " * 80 + "\r")
-                sys.stdout.write("🧠 [Processing Audio] Transcribing local speech...\r")
+                sys.stdout.write("🧠 [Processing Audio] Transcribing speech...\r")
                 sys.stdout.flush()
 
                 full_audio = np.concatenate(frames)
+                
+                # Normalize / Boost audio for clear recognition
+                peak = np.max(np.abs(full_audio))
+                if peak > 1e-4:
+                    full_audio = full_audio * (0.75 / peak)
+
                 sys.stdout.write("\r" + " " * 80 + "\r")
 
-                # Transcribe
+                # Transcribe via SAPI / acoustic matcher
                 transcribed, conf = asr.transcribe_audio(full_audio, sample_rate=sample_rate)
                 transcribed_clean = transcribed.strip()
 
                 if transcribed_clean:
                     print(f"\n🗣️ Heard: \"{transcribed_clean}\" (Conf: {conf:.2f})")
                     
-                    # Check if utterance started with wake word "Hey Miku"
+                    # Strip wake word if spoken at start
                     lower = transcribed_clean.lower()
-                    if lower.startswith("hey miku"):
-                        cmd_text = lower.replace("hey miku", "").strip()
+                    if lower.startswith("hey miku") or lower.startswith("miku"):
+                        cmd_text = lower.replace("hey miku", "").replace("miku", "").strip()
                         if not cmd_text:
-                            orchestrator.respond("Yes, I'm here! What can I do for you?")
+                            orchestrator.respond("Hello! I am Miku. How can I help you today?")
                             continue
                         transcribed_clean = cmd_text
 
@@ -179,9 +236,8 @@ def run_voice_loop(orchestrator: Orchestrator, nlu: NLUEngine, wakeword: WakeWor
                     res = orchestrator.handle_intent(parsed)
                     print(f"🤖 Miku > {res.get('response')}\n")
                 else:
-                    # Low audio or unintelligible noise
-                    print("\n[Notice] Audio detected but no clear speech was recognized.")
-                    print("Tip: Speak clearly into your microphone or check microphone volume.\n")
+                    print("\n[Notice] Sound detected but no words recognized.")
+                    print("Tip: Speak clearly or check microphone level.\n")
 
                 time.sleep(0.3)
 
@@ -244,13 +300,18 @@ def main():
     parser = argparse.ArgumentParser(description="Miku Offline-First Voice Assistant")
     parser.add_argument("--text", action="store_true", help="Start directly in interactive text mode")
     parser.add_argument("--voice", action="store_true", help="Start in voice listening mode with live hearing animation")
-    parser.add_argument("--wake-word-only", action="store_true", help="Require saying 'Hey Miku' before every command in voice mode")
+    parser.add_argument("--test-mic", action="store_true", help="Test microphone input with live visual audio meter")
+    parser.add_argument("--device", type=int, default=None, help="Audio input device index (default: system default)")
     parser.add_argument("--test-mode", action="store_true", help="Run automated self-verification suite")
     parser.add_argument("--no-tts", action="store_true", help="Disable audio speech output")
     parser.add_argument("--retrain-nlu", action="store_true", help="Retrain NLU intent classifier from scratch")
     args = parser.parse_args()
 
     print_banner()
+
+    if args.test_mic:
+        run_test_mic(device_index=args.device)
+        return
 
     print("[1/4] Initializing NLU engine...")
     nlu = NLUEngine()
@@ -264,13 +325,13 @@ def main():
     print("[3/4] Initializing ASR engine with Voice Activity Detection...")
     asr = ASREngine()
 
-    print("[4/4] Initializing Orchestrator & Control Layer...")
+    print("[4/4] Initializing Orchestrator & Female Voice (Microsoft Zira)...")
     orchestrator = Orchestrator(tts_enabled=not args.no_tts)
 
     if args.test_mode:
         run_self_test(orchestrator, nlu, wakeword, asr)
     elif args.voice:
-        run_voice_loop(orchestrator, nlu, wakeword, asr, require_wake_word=args.wake_word_only)
+        run_voice_loop(orchestrator, nlu, wakeword, asr, device_index=args.device)
     else:
         run_interactive_text(orchestrator, nlu)
 

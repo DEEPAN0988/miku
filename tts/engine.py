@@ -1,6 +1,6 @@
 """
 Local Offline Text-To-Speech (TTS) Engine for Miku.
-Uses Windows SAPI5 / pyttsx3.
+Uses Windows SAPI5 / pyttsx3 with Female Voice by default.
 100% offline, zero cloud API, zero external black-box models.
 """
 
@@ -10,10 +10,11 @@ from typing import Optional, List, Dict, Any
 
 
 class TTSEngine:
-    def __init__(self, rate: int = 175, volume: float = 0.9, voice_index: int = 0):
+    def __init__(self, rate: int = 175, volume: float = 0.95, prefer_female: bool = True):
         self.rate = rate
         self.volume = volume
-        self.voice_index = voice_index
+        self.prefer_female = prefer_female
+        self.voice_id = None
         self._lock = threading.Lock()
         self._engine = None
         self._init_engine()
@@ -25,10 +26,25 @@ class TTSEngine:
             self._engine.setProperty('rate', self.rate)
             self._engine.setProperty('volume', self.volume)
             voices = self._engine.getProperty('voices')
-            if voices and len(voices) > self.voice_index:
-                self._engine.setProperty('voice', voices[self.voice_index].id)
-        except Exception as e:
-            # Fallback if pyttsx3 fails to initialize COM
+            
+            # Find female voice (e.g. Zira, Hazel, Eva, or any marked female)
+            female_voice = None
+            if self.prefer_female and voices:
+                for v in voices:
+                    name_lower = v.name.lower()
+                    if any(k in name_lower for k in ["zira", "female", "eva", "hazel", "catherine", "susan"]):
+                        female_voice = v.id
+                        break
+                # If not matched by name, check index 1 (standard Windows female voice slot)
+                if not female_voice and len(voices) > 1:
+                    female_voice = voices[1].id
+                elif not female_voice and len(voices) > 0:
+                    female_voice = voices[0].id
+
+            self.voice_id = female_voice or (voices[0].id if voices else None)
+            if self.voice_id:
+                self._engine.setProperty('voice', self.voice_id)
+        except Exception:
             self._engine = None
 
     def get_available_voices(self) -> List[Dict[str, Any]]:
@@ -50,7 +66,7 @@ class TTSEngine:
 
     def speak(self, text: str, block: bool = True):
         """
-        Speak text through the system audio device.
+        Speak text through system audio speaker using female voice.
         """
         if not text or not text.strip():
             return
@@ -59,20 +75,24 @@ class TTSEngine:
             with self._lock:
                 try:
                     import pyttsx3
-                    # Re-init engine per thread to prevent COM concurrency conflicts on Windows
                     engine = pyttsx3.init('sapi5')
                     engine.setProperty('rate', self.rate)
                     engine.setProperty('volume', self.volume)
-                    voices = engine.getProperty('voices')
-                    if voices and len(voices) > self.voice_index:
-                        engine.setProperty('voice', voices[self.voice_index].id)
+                    if self.voice_id:
+                        engine.setProperty('voice', self.voice_id)
                     engine.say(text)
                     engine.runAndWait()
                     engine.stop()
-                except Exception as e:
-                    # Fallback to PowerShell speech synthesis if COM is locked
+                except Exception:
+                    # Fallback to PowerShell SpeechSynthesizer with Female hint
                     safe_text = text.replace("'", "''").replace('"', '\"')
-                    os.system(f'powershell -Command "Add-Type -AssemblyName System.Speech; (New-Object System.Speech.Synthesis.SpeechSynthesizer).Speak(\'{safe_text}\')" >nul 2>&1')
+                    ps_cmd = f"""
+                    Add-Type -AssemblyName System.Speech;
+                    $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer;
+                    try {{ $synth.SelectVoiceByHints([System.Speech.Synthesis.VoiceGender]::Female) }} catch {{}};
+                    $synth.Speak('{safe_text}')
+                    """
+                    os.system(f'powershell -NoProfile -Command "{ps_cmd}" >nul 2>&1')
 
         if block:
             _do_speak()
@@ -81,13 +101,15 @@ class TTSEngine:
             t.start()
 
     def save_to_file(self, text: str, output_path: str) -> bool:
-        """Save synthesized speech to a local .wav file."""
+        """Save synthesized speech to local .wav file."""
         with self._lock:
             try:
                 import pyttsx3
                 engine = pyttsx3.init('sapi5')
                 engine.setProperty('rate', self.rate)
                 engine.setProperty('volume', self.volume)
+                if self.voice_id:
+                    engine.setProperty('voice', self.voice_id)
                 engine.save_to_file(text, output_path)
                 engine.runAndWait()
                 return os.path.exists(output_path)
