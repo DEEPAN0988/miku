@@ -25,6 +25,17 @@ try:
 except ImportError:
     raise ImportError("miku_core.py must be present in the python path.")
 
+# Import formal logic verifier (Phase III Formal Logic Gating)
+try:
+    from miku_prover import verify_and_prove
+except ImportError:
+    def verify_and_prove(code: str) -> Tuple[bool, str]:
+        try:
+            ast.parse(code)
+            return True, "AST syntax valid"
+        except SyntaxError as e:
+            return False, f"SyntaxError: {e.msg}"
+
 
 class MCTSNode:
     """
@@ -117,30 +128,22 @@ class HierarchicalMCTS:
         if not candidates:
             candidates = ["# Proceeding with standard execution", "pass"]
         return candidates
-
     async def _evaluate_rollout(self, candidate_code: str) -> float:
         """
-        Evaluates a code trajectory using AST parsing and Sandboxed Execution.
-        Reward structure:
-          +1.0 : Valid Python AST syntax & clean execution (code 0)
-          +0.5 : Valid Python AST syntax
-          -0.5 : Incomplete / ambiguous syntax
-          -1.0 : SyntaxError or Traceback
+        Evaluates a code trajectory using A-Priori Formal Proofs and Empirical Sandboxing.
+        Pre-Emptive Pruning Hook:
+          - Bypasses sandbox and assigns -1.0 immediately if formal proof fails.
         """
         if not candidate_code.strip():
             return 0.0
 
-        # 1. Static AST Verification
-        try:
-            ast.parse(candidate_code)
-            ast_valid = True
-        except SyntaxError:
-            ast_valid = False
-
-        if not ast_valid:
+        # 1. Pre-Emptive Formal Logic & Safety Gating Proof
+        is_safe, proof_reason = verify_and_prove(candidate_code)
+        if not is_safe:
+            print(f"\033[38;5;196m[PROVER PRUNED]\033[0m {proof_reason} -> Bypassing Sandbox (Reward: -1.0)")
             return -1.0
 
-        # 2. Sandboxed Subprocess REPL Execution (0.5s fast verification)
+        # 2. Sandboxed Subprocess REPL Execution (Empirical Verification)
         res = await execute_code_sandboxed(candidate_code, timeout=1.0)
         if res["success"]:
             return 1.0
