@@ -57,6 +57,34 @@ class Orchestrator:
                 msg = self.respond("Action cancelled. No changes were made.")
                 return {"success": True, "action": "cancelled", "response": msg}
 
+        # 1.5 Conversational & Helper Intents
+        if intent == "greeting":
+            msg = self.respond("Hello! I am Miku, your offline personal assistant. What would you like to do?")
+            return {"success": True, "response": msg}
+
+        if intent == "identity":
+            msg = self.respond("I am Miku, an offline-first AI voice assistant running locally on your PC without external API keys or cloud models.")
+            return {"success": True, "response": msg}
+
+        if intent == "status_query":
+            msg = self.respond("I am online, listening, and ready for your commands.")
+            return {"success": True, "response": msg}
+
+        if intent == "help":
+            help_text = (
+                "You can ask me to:\n"
+                " - Check time/date: 'what is the time'\n"
+                " - Plan your day/goals: 'plan my day' or 'plan my training for marathon'\n"
+                " - Manage tasks: 'create task finish code with priority high'\n"
+                " - Launch & write: 'open notepad and write an essay about robotics'\n"
+                " - System performance: 'system status'\n"
+                " - Vision: 'take a photo' or 'read screen'\n"
+                " - Devices: 'scan bluetooth' or 'scan wifi'\n"
+                " - Manage files & apps: 'delete file <path>' or 'close <app>'"
+            )
+            msg = self.respond(help_text)
+            return {"success": True, "response": msg}
+
         # 2. Compositional Command: "open <app> and write an essay about <topic>"
         if intent == "compositional_app_write":
             app = entities.get("app", "notepad")

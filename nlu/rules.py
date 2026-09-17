@@ -14,6 +14,19 @@ class RuleMatcher:
         raw = text.strip()
         lower = raw.lower()
 
+        # 0. Greetings & Identity & Help (Natural conversation)
+        if re.search(r"^(?:hi|hello|hey|hey\s+miku|yo|good\s+(?:morning|evening|afternoon|day)|greetings)(?:[!\.\?,\s]|$)", lower):
+            return {"intent": "greeting", "entities": {}, "confidence": 0.99}
+
+        if re.search(r"\b(who are you|what('s| is) your name|what are you|introduce yourself|tell me about yourself)\b", lower):
+            return {"intent": "identity", "entities": {}, "confidence": 0.99}
+
+        if re.search(r"^(?:help|what can you do|show commands|list commands|help me|how to use)\b", lower):
+            return {"intent": "help", "entities": {}, "confidence": 0.99}
+
+        if re.search(r"\b(how are you|are you (?:there|listening|online)|status check)\b", lower):
+            return {"intent": "status_query", "entities": {}, "confidence": 0.98}
+
         # 1. Compositional command: "open <app> and write/type <content> [about <topic>]"
         comp_match = re.search(r"open\s+([a-zA-Z0-9\s]+?)\s+and\s+(?:write|type)\s+(?:an?\s+)?([a-zA-Z0-9\s]+?)(?:\s+about\s+(.+))?$", lower)
         if comp_match:
@@ -41,15 +54,25 @@ class RuleMatcher:
                     "confidence": 0.95
                 }
 
+        # App Termination: "close <app>", "exit <app>"
+        close_match = re.match(r"^(?:please\s+)?(?:close|exit|quit|shut)\s+([a-zA-Z0-9\s\.\-_]+)$", lower)
+        if close_match:
+            app = close_match.group(1).strip()
+            return {
+                "intent": "kill_process",
+                "entities": {"process": app},
+                "confidence": 0.95
+            }
+
         # 3. Time & Date queries: "what time is it", "current time", "what day is it"
-        if re.search(r"\b(what('s| is) the time|current time|tell me the time|what time is it)\b", lower):
+        if re.search(r"\b(what('s| is) the time|current time|tell me the time|what time is it|time please)\b", lower):
             return {"intent": "get_time", "entities": {}, "confidence": 0.99}
 
-        if re.search(r"\b(what('s| is) (the |today's )?date|what day is (it|today))\b", lower):
+        if re.search(r"\b(what('s| is) (the |today's )?date|what day is (it|today)|date please)\b", lower):
             return {"intent": "get_date", "entities": {}, "confidence": 0.99}
 
         # 4. Day & Task Planning: "plan my day", "show schedule", "what do i have today"
-        if re.search(r"\b(plan my day|show my (day|schedule|tasks)|what('s| is) my schedule|today's plan)\b", lower):
+        if re.search(r"\b(plan my day|show my (day|schedule|tasks)|what('s| is) my schedule|today's plan|what do i have today)\b", lower):
             return {"intent": "plan_day", "entities": {}, "confidence": 0.96}
 
         # 5. Goal decomposition: "how should i train for <goal>", "plan goal <goal>", "plan my training for <goal>"
@@ -73,7 +96,7 @@ class RuleMatcher:
                 "confidence": 0.95
             }
 
-        if re.search(r"\b(list tasks|show tasks|what are my tasks|pending tasks)\b", lower):
+        if re.search(r"\b(list tasks|show tasks|what are my tasks|pending tasks|my tasks)\b", lower):
             return {"intent": "list_tasks", "entities": {}, "confidence": 0.98}
 
         # 7. Sensitive / Confirmation-Gated Actions
@@ -112,11 +135,11 @@ class RuleMatcher:
             }
 
         # 10. System Status
-        if re.search(r"\b(system status|cpu usage|battery level|memory usage|pc status)\b", lower):
+        if re.search(r"\b(system status|cpu usage|battery level|memory usage|pc status|how is my pc)\b", lower):
             return {"intent": "system_status", "entities": {}, "confidence": 0.95}
 
         # 11. Confirmation responses: "yes", "confirm", "proceed", "no", "cancel"
-        if lower in ["yes", "confirm", "proceed", "sure", "do it", "i confirm", "affirmative"]:
+        if lower in ["yes", "confirm", "proceed", "sure", "do it", "i confirm", "affirmative", "ok", "okay"]:
             return {"intent": "confirm_yes", "entities": {}, "confidence": 1.0}
 
         if lower in ["no", "cancel", "stop", "abort", "don't do it", "never mind", "negative"]:
