@@ -170,6 +170,13 @@ class SystemLifeOSBridge:
                 "tasks_solved": row[6]
             }
 
+    @classmethod
+    def render_hunter_status(cls, db_path: str = "c:/miku/system_life.db"):
+        """Convenience classmethod to display Hunter status window on terminal."""
+        bridge = cls(db_path=db_path)
+        stats = bridge.get_stats()
+        print("\n" + SoloLevelingHUD.format_status_screen(stats) + "\n")
+
     def award_progress(self, exp_gain: int, gold_gain: int, action_name: str) -> List[str]:
         """
         Awards EXP and Gold, handling level-ups and Hunter rank promotions.
