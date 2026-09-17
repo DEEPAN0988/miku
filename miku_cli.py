@@ -41,11 +41,42 @@ def print_banner():
     print(banner)
 
 
+def ensure_microphone_unmuted() -> dict:
+    """
+    Inspect Windows CoreAudio via pycaw:
+    If microphone is muted in Windows settings or volume is too low,
+    automatically unmute and set level to 85%.
+    """
+    status = {"unmuted": False, "adjusted": False, "volume": 1.0}
+    try:
+        from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+        from ctypes import cast, POINTER
+        mic = AudioUtilities.GetMicrophone()
+        if mic:
+            interface = mic.Activate(IAudioEndpointVolume._iid_, 7, None)
+            vol = cast(interface, POINTER(IAudioEndpointVolume))
+            if vol.GetMute() == 1:
+                vol.SetMute(0, None)
+                status["unmuted"] = True
+            current_vol = vol.GetMasterVolumeLevelScalar()
+            if current_vol < 0.70:
+                vol.SetMasterVolumeLevelScalar(0.85, None)
+                status["adjusted"] = True
+                status["volume"] = 0.85
+            else:
+                status["volume"] = current_vol
+    except Exception:
+        pass
+    return status
+
+
 def render_equalizer(rms: float, max_bars: int = 16) -> str:
-    """Generate dynamic visual equalizer string based on logarithmic decibel scale."""
-    # Convert RMS to dB: -65 dB (near silence) to -15 dB (loud voice)
+    """
+    Generate dynamic visual equalizer string using high-sensitivity decibel scale.
+    Maps -85 dB (silence) to -25 dB (loud speech) smoothly to 0% - 100%.
+    """
     db = 20.0 * np.log10(max(rms, 1e-6))
-    level = max(0.0, min(1.0, (db + 65.0) / 50.0))
+    level = max(0.0, min(1.0, (db + 85.0) / 60.0))
     
     filled = int(level * max_bars)
     bar = "|" * filled + "." * (max_bars - filled)
@@ -93,7 +124,13 @@ def run_interactive_text(orchestrator: Orchestrator, nlu: NLUEngine):
 
 
 def run_test_mic(device_index: int = None):
-    """Real-time 10-second microphone test with visual audio meter."""
+    """Real-time 10-second microphone test with visual audio meter and unmuting check."""
+    mic_status = ensure_microphone_unmuted()
+    if mic_status["unmuted"]:
+        print("[Notice] Microphone was MUTED in Windows settings. Miku automatically UNMUTED it.")
+    if mic_status["adjusted"]:
+        print(f"[Notice] Microphone recording volume was low. Raised to {int(mic_status['volume']*100)}%.")
+
     try:
         import sounddevice as sd
     except Exception as e:
@@ -107,7 +144,7 @@ def run_test_mic(device_index: int = None):
     dev_name = dev_info['name']
     print(f"\n[Microphone Test Active]")
     print(f"Device: '{dev_name}' (16kHz Mono)")
-    print("Speak or tap your mic to observe volume meter response.")
+    print("Speak or make sound into your mic. The volume meter will react in real-time.")
     print("Running for 10 seconds (or press Ctrl+C to stop)...\n")
 
     start_time = time.time()
@@ -120,13 +157,20 @@ def run_test_mic(device_index: int = None):
                 remaining = int(10.0 - (time.time() - start_time))
                 sys.stdout.write(f"\r🎤 [Mic Signal] {eq}  Remaining: {remaining}s   ")
                 sys.stdout.flush()
-        print("\n\n[Mic Test Complete] Audio input stream verified successfully.")
+        print("\n\n[Mic Test Complete] Audio input stream verified.")
     except KeyboardInterrupt:
         print("\n\n[Mic Test Stopped]")
 
 
 def run_voice_loop(orchestrator: Orchestrator, nlu: NLUEngine, wakeword: WakeWordEngine, asr: ASREngine, device_index: int = None):
     print("\n[Miku Voice Mode Active]")
+
+    # Check Windows mic mute status
+    mic_status = ensure_microphone_unmuted()
+    if mic_status["unmuted"]:
+        print("[Notice] Microphone was MUTED in Windows. Miku automatically UNMUTED it.")
+    if mic_status["adjusted"]:
+        print(f"[Notice] Microphone volume adjusted to {int(mic_status['volume']*100)}%.")
 
     try:
         import sounddevice as sd
@@ -151,7 +195,9 @@ def run_voice_loop(orchestrator: Orchestrator, nlu: NLUEngine, wakeword: WakeWor
                 data, _ = stream.read(chunk_size)
                 ambient_samples.append(float(np.sqrt(np.mean(data.flatten() ** 2))))
             ambient_floor = max(1e-5, float(np.mean(ambient_samples)))
-            speech_threshold = max(0.0003, ambient_floor * 2.2)
+            
+            # High-sensitivity trigger threshold
+            speech_threshold = max(0.0001, ambient_floor * 2.0)
             
             print(f"Calibration Complete: Ambient Floor={ambient_floor:.6f}, Trigger Threshold={speech_threshold:.6f}")
             print("\nSpeak your command into the microphone (e.g. 'hi', 'what is the time', 'plan my day').")
@@ -237,7 +283,7 @@ def run_voice_loop(orchestrator: Orchestrator, nlu: NLUEngine, wakeword: WakeWor
                     print(f"🤖 Miku > {res.get('response')}\n")
                 else:
                     print("\n[Notice] Sound detected but no words recognized.")
-                    print("Tip: Speak clearly or check microphone level.\n")
+                    print("Tip: Speak clearly into your microphone.\n")
 
                 time.sleep(0.3)
 
