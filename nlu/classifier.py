@@ -8,7 +8,7 @@ import os
 import pickle
 from typing import Dict, Any, Tuple
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import MultinomialNB
 from sklearn.pipeline import Pipeline
 
 MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "nlu_model.pkl")
@@ -107,7 +107,7 @@ class IntentClassifier:
 
         self.pipeline = Pipeline([
             ("tfidf", TfidfVectorizer(ngram_range=(1, 2), lowercase=True, max_features=1000)),
-            ("clf", LogisticRegression(solver="liblinear", C=1.0, random_state=42))
+            ("clf", MultinomialNB(alpha=0.1))
         ])
 
         self.pipeline.fit(texts, labels)
