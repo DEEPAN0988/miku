@@ -27,6 +27,15 @@ class RuleMatcher:
         if re.search(r"\b(how are you|are you (?:there|listening|online)|status check)\b", lower):
             return {"intent": "status_query", "entities": {}, "confidence": 0.98}
 
+        if re.search(r"^(?:thank\s+you|thanks|thanks\s+miku|thx|th)(?:[!\.\?,\s]|$)", lower):
+            return {"intent": "thanks", "entities": {}, "confidence": 0.99}
+
+        if re.search(r"^(?:great|awesome|cool|nice|good\s+job|well\s+done)(?:[!\.\?,\s]|$)", lower):
+            return {"intent": "appreciation", "entities": {}, "confidence": 0.98}
+
+        if re.search(r"^(?:bye|goodbye|see\s+you|exit|quit)(?:[!\.\?,\s]|$)", lower):
+            return {"intent": "goodbye", "entities": {}, "confidence": 0.99}
+
         # 1. Compositional command: "open <app> and write/type <content> [about <topic>]"
         comp_match = re.search(r"open\s+([a-zA-Z0-9\s]+?)\s+and\s+(?:write|type)\s+(?:an?\s+)?([a-zA-Z0-9\s]+?)(?:\s+about\s+(.+))?$", lower)
         if comp_match:

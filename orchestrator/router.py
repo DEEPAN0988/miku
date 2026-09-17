@@ -85,6 +85,18 @@ class Orchestrator:
             msg = self.respond(help_text)
             return {"success": True, "response": msg}
 
+        if intent == "thanks":
+            msg = self.respond("You're very welcome! Let me know if you need anything else.")
+            return {"success": True, "response": msg}
+
+        if intent == "appreciation":
+            msg = self.respond("Thank you! I'm here to help.")
+            return {"success": True, "response": msg}
+
+        if intent == "goodbye":
+            msg = self.respond("Goodbye! Have a great day.")
+            return {"success": True, "response": msg}
+
         # 2. Compositional Command: "open <app> and write an essay about <topic>"
         if intent == "compositional_app_write":
             app = entities.get("app", "notepad")
@@ -94,7 +106,10 @@ class Orchestrator:
 
         # 3. App Launching
         if intent == "launch_app":
-            app = entities.get("app", "")
+            app = entities.get("app", "").strip()
+            if not app or len(app) < 2:
+                msg = self.respond("Which application would you like me to open?")
+                return {"success": False, "response": msg}
             res = self.system.launch_app(app)
             if res.get("success"):
                 msg = self.respond(f"Opened {app}.")
@@ -200,8 +215,12 @@ class Orchestrator:
             msg = self.respond(summary)
             return {"success": True, "data": res, "response": msg}
 
-        # 11. Unknown / Open-Ended Fallback
-        msg = self.respond(f"I understood: '{raw_text}', but I don't have an action assigned for this command yet.")
+        # 11. Unknown / Low-Confidence Fallback
+        conf = nlu_result.get("confidence", 0.0)
+        if conf < 0.40 or len(raw_text.strip()) <= 2:
+            msg = self.respond("I didn't quite catch that. Could you please repeat?")
+        else:
+            msg = self.respond(f"I heard: '{raw_text}', but I don't have a specific action assigned for this yet. Say 'help' to see what I can do.")
         return {"success": False, "intent": intent, "response": msg}
 
     def _handle_compositional_write(self, app: str, doc_type: str, topic: str) -> Dict[str, Any]:
