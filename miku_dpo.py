@@ -2,17 +2,21 @@
 MIKU DPO ENGINE (Phase II v1.0: Metacognition)
 Offline Experience Replay & Direct Preference Optimization on Low-Rank Adapters
 
-Key Architecture:
+Key Architectural Invariants:
 1. LinearLoRA & inject_lora: Minimalist, zero-allocation LoRA wrappers (r=4, alpha=8.0)
    targeting QKV projections & MLPs while freezing base canonical 8M weights.
-2. Zero-Duplicate Reference Model: Context manager toggles LoRA forward bypass,
-   computing pi_ref directly through frozen base weights with 0 extra RAM footprint.
-3. ExperienceBuffer: Thread-safe replay deque tracking (prompt, chosen, rejected) trajectories.
-4. compute_dpo_loss: Numerically stable DPO loss with exact sequence-level response logprob gathering.
-5. IdleTrainer: Non-blocking asyncio background daemon running AdamW optimization during OS idle cycles.
+2. lora_enabled Flag (Zero-RAM Copy): Toggles LoRA adapter on/off in-place,
+   allowing the active policy (pi_theta) and reference policy (pi_ref) to share
+   the exact same model in memory.
+3. ExperienceBuffer: Thread-safe replay buffer storing tokenized (prompt, chosen, rejected)
+   trajectories with dynamic padding collation for batching.
+4. compute_dpo_loss: Vectorized, numerically stable DPO loss with exact response-token masking.
+5. IdleTrainer: Async daemon supporting gradient accumulation, idle timer detection,
+   and interruptible micro-batch execution (await asyncio.sleep(0)).
 """
 
 import sys
+import copy
 import random
 import threading
 import asyncio
@@ -37,7 +41,7 @@ except ImportError:
 
 
 # =====================================================================
-# 1. MINIMALIST LORA ADAPTER & ZERO-DUPLICATION REFERENCE ENGINE
+# 1. MINIMALIST LORA INJECTOR WITH ZERO-COPY REFERENCE TOGGLE
 # =====================================================================
 
 class LinearLoRA(nn.Module):
@@ -45,6 +49,9 @@ class LinearLoRA(nn.Module):
     Low-Rank Adaptation wrapper for nn.Linear.
     Forward: W'x = Wx + (alpha / r) * (x @ A.T) @ B.T
     A ~ N(0, 0.02^2), B = 0.
+    
+    Memory Hack: `lora_enabled: bool` flag bypasses adapter projection when False,
+    allowing zero-duplication reference model evaluation in the same RAM footprint.
     """
 
     def __init__(self, base_linear: nn.Linear, r: int = 4, alpha: float = 8.0):
@@ -53,52 +60,37 @@ class LinearLoRA(nn.Module):
         self.r = r
         self.alpha = alpha
         self.scaling = alpha / r
-        self.adapter_enabled: bool = True
+        self.lora_enabled: bool = True
 
         in_features = base_linear.in_features
         out_features = base_linear.out_features
 
-        # LoRA parameter matrices
+        # Low-rank projection matrices
         self.lora_A = nn.Parameter(torch.empty(r, in_features))
         self.lora_B = nn.Parameter(torch.zeros(out_features, r))
 
-        # Gaussian init for A, Zero init for B (Ensures identity at step 0)
+        # Initialization: Gaussian for A, zero for B (guarantees identity at step 0)
         nn.init.normal_(self.lora_A, mean=0.0, std=0.02)
         nn.init.zeros_(self.lora_B)
 
-        # Freeze base weights permanently
+        # Freeze base linear parameters
         self.base_linear.weight.requires_grad = False
         if self.base_linear.bias is not None:
             self.base_linear.bias.requires_grad = False
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         base_out = self.base_linear(x)
-        if not self.adapter_enabled or self.r == 0:
+        if not self.lora_enabled or self.r == 0:
             return base_out
         lora_out = (x @ self.lora_A.T) @ self.lora_B.T
         return base_out + self.scaling * lora_out
 
 
-class disable_adapters:
-    """
-    Context manager to bypass LoRA adapters on the fly.
-    Allows evaluating the canonical reference model (pi_ref) without
-    duplicating the model weights in RAM.
-    """
-
-    def __init__(self, model: nn.Module):
-        self.model = model
-        self.lora_modules: List[LinearLoRA] = [
-            m for m in model.modules() if isinstance(m, LinearLoRA)
-        ]
-
-    def __enter__(self):
-        for m in self.lora_modules:
-            m.adapter_enabled = False
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        for m in self.lora_modules:
-            m.adapter_enabled = True
+def set_lora_enabled(model: nn.Module, enabled: bool) -> None:
+    """Toggles LoRA adapters on/off across all LinearLoRA modules in the model."""
+    for module in model.modules():
+        if isinstance(module, LinearLoRA):
+            module.lora_enabled = enabled
 
 
 def inject_lora(
@@ -107,28 +99,25 @@ def inject_lora(
     alpha: float = 8.0
 ) -> List[nn.Parameter]:
     """
-    Freezes base Transformer weights and wraps QKV, projection, and MLP layers
+    Freezes base Transformer weights and swaps QKV, out-proj, and MLP Linear layers
     with LinearLoRA modules. Returns list of trainable LoRA parameters.
     """
-    # 1. Freeze all base parameters
+    # Freeze all base parameters
     for param in model.parameters():
         param.requires_grad = False
 
     trainable_params: List[nn.Parameter] = []
 
-    # 2. Inject into each Transformer block
+    # Inject into each Transformer block
     for block in model.blocks:
-        # Wrap Attention QKV projection
         if isinstance(block.attn.qkv_proj, nn.Linear):
             block.attn.qkv_proj = LinearLoRA(block.attn.qkv_proj, r=r, alpha=alpha)
             trainable_params.extend([block.attn.qkv_proj.lora_A, block.attn.qkv_proj.lora_B])
 
-        # Wrap Attention Out projection
         if isinstance(block.attn.out_proj, nn.Linear):
             block.attn.out_proj = LinearLoRA(block.attn.out_proj, r=r, alpha=alpha)
             trainable_params.extend([block.attn.out_proj.lora_A, block.attn.out_proj.lora_B])
 
-        # Wrap MLP Linear layers
         if isinstance(block.mlp[0], nn.Linear):
             block.mlp[0] = LinearLoRA(block.mlp[0], r=r, alpha=alpha)
             trainable_params.extend([block.mlp[0].lora_A, block.mlp[0].lora_B])
@@ -141,43 +130,106 @@ def inject_lora(
 
 
 # =====================================================================
-# 2. THREAD-SAFE EXPERIENCE REPLAY BUFFER
+# 2. EXPERIENCE REPLAY BUFFER WITH DYNAMIC PADDING COLLATION
 # =====================================================================
 
 class ExperienceBuffer:
     """
-    Thread-safe circular experience replay buffer storing
-    (prompt, chosen, rejected) trajectories for DPO training.
+    Thread-safe circular experience replay buffer storing tokenized trajectories:
+    (prompt_tokens, chosen_tokens, rejected_tokens).
     """
 
     def __init__(self, max_capacity: int = 512):
         self.max_capacity = max_capacity
-        self.buffer: List[Dict[str, Any]] = []
+        self.buffer: List[Dict[str, List[int]]] = []
         self._lock = threading.Lock()
 
     def add(
         self,
-        prompt: str,
-        chosen: str,
-        rejected: str,
-        metadata: Optional[Dict[str, Any]] = None
+        prompt_tokens: List[int],
+        chosen_tokens: List[int],
+        rejected_tokens: List[int]
     ) -> None:
         with self._lock:
             self.buffer.append({
-                "prompt": prompt,
-                "chosen": chosen,
-                "rejected": rejected,
-                "metadata": metadata or {}
+                "prompt_tokens": list(prompt_tokens),
+                "chosen_tokens": list(chosen_tokens),
+                "rejected_tokens": list(rejected_tokens)
             })
             if len(self.buffer) > self.max_capacity:
                 self.buffer.pop(0)
 
-    def sample(self, batch_size: int) -> List[Dict[str, Any]]:
+    def sample_batch(
+        self,
+        batch_size: int,
+        pad_token_id: int = 0,
+        device: str = "cpu"
+    ) -> Optional[Dict[str, torch.Tensor]]:
+        """
+        Samples a batch and dynamically collates into padded tensors:
+        - input_ids: (B, T)
+        - target_ids: (B, T)
+        - response_mask: (B, T) [1.0 for response tokens, 0.0 for prompt/padding]
+        """
         with self._lock:
             if not self.buffer:
-                return []
+                return None
             k = min(batch_size, len(self.buffer))
-            return random.sample(self.buffer, k)
+            episodes = random.sample(self.buffer, k)
+
+        def collate_trajectories(prefix: str) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+            sequences = []
+            prompt_lens = []
+            for ep in episodes:
+                full_seq = ep["prompt_tokens"] + ep[f"{prefix}_tokens"]
+                sequences.append(full_seq)
+                prompt_lens.append(len(ep["prompt_tokens"]))
+
+            max_len = max(len(s) for s in sequences)
+            # We predict next token, so sequence length in shift is max_len - 1
+            seq_len = max_len - 1
+
+            input_batch = []
+            target_batch = []
+            mask_batch = []
+
+            for s, p_len in zip(sequences, prompt_lens):
+                # Inputs: s[:-1], Targets: s[1:]
+                cur_in = s[:-1]
+                cur_target = s[1:]
+
+                # Response mask: 1.0 where index in target corresponds to response tokens
+                # Target index >= p_len - 1 corresponds to response tokens
+                resp_start = max(0, p_len - 1)
+                cur_mask = [0.0] * resp_start + [1.0] * (len(cur_target) - resp_start)
+
+                # Pad to seq_len
+                pad_len = seq_len - len(cur_in)
+                cur_in = cur_in + [pad_token_id] * pad_len
+                cur_target = cur_target + [pad_token_id] * pad_len
+                cur_mask = cur_mask + [0.0] * pad_len
+
+                input_batch.append(cur_in)
+                target_batch.append(cur_target)
+                mask_batch.append(cur_mask)
+
+            return (
+                torch.tensor(input_batch, dtype=torch.long, device=device),
+                torch.tensor(target_batch, dtype=torch.long, device=device),
+                torch.tensor(mask_batch, dtype=torch.float32, device=device)
+            )
+
+        c_in, c_target, c_mask = collate_trajectories("chosen")
+        r_in, r_target, r_mask = collate_trajectories("rejected")
+
+        return {
+            "chosen_input_ids": c_in,
+            "chosen_target_ids": c_target,
+            "chosen_response_mask": c_mask,
+            "rejected_input_ids": r_in,
+            "rejected_target_ids": r_target,
+            "rejected_response_mask": r_mask
+        }
 
     def __len__(self) -> int:
         with self._lock:
@@ -185,99 +237,80 @@ class ExperienceBuffer:
 
 
 # =====================================================================
-# 3. DIRECT PREFERENCE OPTIMIZATION LOSS
+# 3. DIRECT PREFERENCE OPTIMIZATION (DPO) CORE
 # =====================================================================
 
-def get_sequence_response_logprob(
-    model: MikuTransformer,
-    tokenizer: SimpleTokenizer,
-    prompt: str,
-    response: str,
-    device: str = "cpu"
+def compute_response_logprobs(
+    model: nn.Module,
+    input_ids: torch.Tensor,
+    target_ids: torch.Tensor,
+    response_mask: torch.Tensor
 ) -> torch.Tensor:
     """
-    Computes sum of log probabilities of the response tokens conditioned on the prompt.
-    Tokens inside the prompt are strictly masked out of the probability computation.
+    Vectorized computation of response sequence log-probabilities:
+    log pi(y|x) = sum_{t in response} log P(y_t | x, y_{<t})
+    Prompt tokens and padding tokens are masked out with 0.0.
     """
-    prompt_ids = tokenizer.encode(prompt, add_special=True)
-    resp_ids = tokenizer.encode(response, add_special=False)
-    if not resp_ids:
-        resp_ids = [tokenizer.eos_id]
-
-    full_ids = prompt_ids + resp_ids
-    if len(full_ids) > model.max_seq_len:
-        full_ids = full_ids[:model.max_seq_len]
-
-    idx = torch.tensor([full_ids], dtype=torch.long, device=device)  # (1, T)
-    logits = model(idx)  # (1, T, vocab_size)
-
-    # Shift logits and targets so token at i predicts token at i+1
-    shift_logits = logits[:, :-1, :]  # (1, T-1, vocab_size)
-    shift_labels = idx[:, 1:]         # (1, T-1)
-
-    log_probs = F.log_softmax(shift_logits, dim=-1)
-    gathered_log_probs = torch.gather(log_probs, dim=-1, index=shift_labels.unsqueeze(-1)).squeeze(-1)
-
-    # Calculate starting boundary of response tokens in the shifted array
-    # Prompt length in shift_labels is len(prompt_ids) - 1
-    resp_start_idx = max(0, len(prompt_ids) - 1)
-    response_log_probs = gathered_log_probs[:, resp_start_idx:]
-
-    return response_log_probs.sum(dim=-1).squeeze(0)  # Scalar Tensor
+    logits = model(input_ids)  # (B, T, vocab_size)
+    log_probs = F.log_softmax(logits, dim=-1)
+    target_log_probs = torch.gather(log_probs, dim=-1, index=target_ids.unsqueeze(-1)).squeeze(-1)  # (B, T)
+    # Sum strictly over response tokens
+    return (target_log_probs * response_mask).sum(dim=-1)  # (B,)
 
 
 def compute_dpo_loss(
     model: MikuTransformer,
-    tokenizer: SimpleTokenizer,
-    batch: List[Dict[str, Any]],
-    beta: float = 0.1,
-    device: str = "cpu"
+    batch: Dict[str, torch.Tensor],
+    beta: float = 0.1
 ) -> Tuple[torch.Tensor, Dict[str, float]]:
     """
-    Computes Direct Preference Optimization Loss across a batch:
+    Numerically stable Direct Preference Optimization loss:
     L_DPO = -log sigma(beta * ((log pi_theta(y_w|x) - log pi_ref(y_w|x)) -
                               (log pi_theta(y_l|x) - log pi_ref(y_l|x))))
-    Uses disable_adapters() context manager for zero-copy reference evaluation.
+
+    Zero-Copy Execution Flow:
+    1. Set lora_enabled = False -> Forward pass for pi_ref (frozen reference).
+    2. Set lora_enabled = True  -> Forward pass for pi_theta (active policy).
     """
-    losses = []
-    implicit_rewards_chosen = []
-    implicit_rewards_rejected = []
+    c_in = batch["chosen_input_ids"]
+    c_target = batch["chosen_target_ids"]
+    c_mask = batch["chosen_response_mask"]
 
-    for item in batch:
-        prompt = item["prompt"]
-        chosen = item["chosen"]
-        rejected = item["rejected"]
+    r_in = batch["rejected_input_ids"]
+    r_target = batch["rejected_target_ids"]
+    r_mask = batch["rejected_response_mask"]
 
-        # 1. Forward Pass under Active Policy pi_theta
-        logp_theta_chosen = get_sequence_response_logprob(model, tokenizer, prompt, chosen, device=device)
-        logp_theta_rejected = get_sequence_response_logprob(model, tokenizer, prompt, rejected, device=device)
+    # 1. Forward Pass: Reference Model (pi_ref) with LoRA bypassed
+    set_lora_enabled(model, False)
+    with torch.no_grad():
+        pi_ref_chosen = compute_response_logprobs(model, c_in, c_target, c_mask)
+        pi_ref_rejected = compute_response_logprobs(model, r_in, r_target, r_mask)
 
-        # 2. Forward Pass under Frozen Reference Policy pi_ref (zero-copy via adapter bypass)
-        with torch.no_grad():
-            with disable_adapters(model):
-                logp_ref_chosen = get_sequence_response_logprob(model, tokenizer, prompt, chosen, device=device)
-                logp_ref_rejected = get_sequence_response_logprob(model, tokenizer, prompt, rejected, device=device)
+    # 2. Forward Pass: Active Model (pi_theta) with LoRA enabled
+    set_lora_enabled(model, True)
+    pi_theta_chosen = compute_response_logprobs(model, c_in, c_target, c_mask)
+    pi_theta_rejected = compute_response_logprobs(model, r_in, r_target, r_mask)
 
-        # 3. Log-ratio deltas
-        pi_diff_chosen = logp_theta_chosen - logp_ref_chosen
-        pi_diff_rejected = logp_theta_rejected - logp_ref_rejected
+    # 3. Log-ratio differences
+    pi_logratios_chosen = pi_theta_chosen - pi_ref_chosen
+    pi_logratios_rejected = pi_theta_rejected - pi_ref_rejected
 
-        # 4. Numerically stable DPO loss
-        h = beta * (pi_diff_chosen - pi_diff_rejected)
-        loss = -F.logsigmoid(h)
+    # 4. Numerically stable DPO loss via logsigmoid
+    logits_delta = beta * (pi_logratios_chosen - pi_logratios_rejected)
+    loss = -F.logsigmoid(logits_delta).mean()
 
-        losses.append(loss)
-        implicit_rewards_chosen.append((beta * pi_diff_chosen).item())
-        implicit_rewards_rejected.append((beta * pi_diff_rejected).item())
+    with torch.no_grad():
+        reward_chosen = (beta * pi_logratios_chosen).mean().item()
+        reward_rejected = (beta * pi_logratios_rejected).mean().item()
+        margin = reward_chosen - reward_rejected
 
-    total_loss = torch.stack(losses).mean()
     metrics = {
-        "dpo_loss": total_loss.item(),
-        "reward_chosen": float(sum(implicit_rewards_chosen) / len(implicit_rewards_chosen)),
-        "reward_rejected": float(sum(implicit_rewards_rejected) / len(implicit_rewards_rejected)),
-        "reward_margin": float((sum(implicit_rewards_chosen) - sum(implicit_rewards_rejected)) / len(losses))
+        "dpo_loss": loss.item(),
+        "reward_chosen": reward_chosen,
+        "reward_rejected": reward_rejected,
+        "reward_margin": margin
     }
-    return total_loss, metrics
+    return loss, metrics
 
 
 # =====================================================================
@@ -287,7 +320,7 @@ def compute_dpo_loss(
 class IdleTrainer:
     """
     Autonomous background daemon executing DPO updates during OS idle time.
-    Monitors is_idle flag and yields immediately to incoming user queries.
+    Supports gradient accumulation and interruptible micro-batch steps.
     """
 
     def __init__(
@@ -298,6 +331,7 @@ class IdleTrainer:
         lora_params: List[nn.Parameter],
         lr: float = 1e-4,
         batch_size: int = 2,
+        grad_accum_steps: int = 2,
         beta: float = 0.1,
         device: str = "cpu"
     ):
@@ -306,6 +340,7 @@ class IdleTrainer:
         self.buffer = buffer
         self.lora_params = lora_params
         self.batch_size = batch_size
+        self.grad_accum_steps = grad_accum_steps
         self.beta = beta
         self.device = device
 
@@ -316,29 +351,52 @@ class IdleTrainer:
         self.total_steps: int = 0
 
     async def train_step(self) -> Optional[Dict[str, float]]:
-        """Executes a single interruptible DPO training step."""
+        """
+        Executes an interruptible DPO training step with gradient accumulation.
+        Yields control via `await asyncio.sleep(0)` between micro-batches.
+        """
         if len(self.buffer) < self.batch_size:
             return None
 
-        # Check idle gate before training
         if not self.is_idle:
             return None
 
-        batch = self.buffer.sample(self.batch_size)
         self.model.train()
         self.optimizer.zero_grad()
 
-        loss, metrics = compute_dpo_loss(
-            self.model, self.tokenizer, batch, beta=self.beta, device=self.device
-        )
-        loss.backward()
+        accum_loss = 0.0
+        last_metrics = {}
 
-        # Gradient clipping for stability on 8M model
+        for _ in range(self.grad_accum_steps):
+            if not self.is_idle:
+                self.optimizer.zero_grad()
+                return None
+
+            batch = self.buffer.sample_batch(
+                self.batch_size,
+                pad_token_id=self.tokenizer.pad_id,
+                device=self.device
+            )
+            if not batch:
+                break
+
+            loss, metrics = compute_dpo_loss(self.model, batch, beta=self.beta)
+            loss_scaled = loss / self.grad_accum_steps
+            loss_scaled.backward()
+
+            accum_loss += loss.item() / self.grad_accum_steps
+            last_metrics = metrics
+
+            # Non-blocking yield to event loop (user priority interrupt)
+            await asyncio.sleep(0)
+
+        # Gradient clipping for stable LoRA updates
         torch.nn.utils.clip_grad_norm_(self.lora_params, max_norm=1.0)
         self.optimizer.step()
 
         self.total_steps += 1
-        return metrics
+        last_metrics["dpo_loss"] = accum_loss
+        return last_metrics
 
     async def _daemon_loop(self, poll_interval_sec: float = 1.0):
         while self._running:
@@ -346,12 +404,11 @@ class IdleTrainer:
                 if self.is_idle and len(self.buffer) >= self.batch_size:
                     metrics = await self.train_step()
                     if metrics:
-                        # Log non-intrusively
                         pass
                 await asyncio.sleep(poll_interval_sec)
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except Exception:
                 await asyncio.sleep(poll_interval_sec)
 
     def start(self, poll_interval_sec: float = 1.0) -> asyncio.Task:
@@ -384,33 +441,50 @@ async def main():
     tokenizer = SimpleTokenizer()
     model = MikuTransformer(vocab_size=tokenizer.vocab_size, d_model=256, n_layer=4, n_head=8)
 
-    # 1. Inject LoRA adapters into MikuTransformer
+    # 1. Inject LoRA adapters
     print("\n[LoRA Injection] Wrapping Transformer blocks with rank-4 LoRA...")
     lora_params = inject_lora(model, r=4, alpha=8.0)
-    total_base_params = sum(p.numel() for p in model.parameters() if not p.requires_grad)
-    total_lora_params = sum(p.numel() for p in lora_params)
+    base_params = sum(p.numel() for p in model.parameters() if not p.requires_grad)
+    trainable_params = sum(p.numel() for p in lora_params)
 
-    print(f"  Base Parameters (Frozen): {total_base_params:,}")
-    print(f"  LoRA Parameters (Trainable): {total_lora_params:,} ({total_lora_params/total_base_params*100:.2f}% overhead)")
+    print(f"  Base Parameters (Frozen): {base_params:,}")
+    print(f"  LoRA Parameters (Trainable): {trainable_params:,} ({trainable_params/base_params*100:.2f}% overhead)")
 
-    # 2. Initialize Experience Buffer
-    buffer = ExperienceBuffer(max_capacity=100)
-    print("\n[Experience Replay] Logging sample execution trajectories...")
-    buffer.add(
-        prompt="Write Python code to compute 10 factorial.",
-        chosen="import math\nprint(math.factorial(10))",
-        rejected="def fact(n):\nreturn n * fact(n-1)\nprint(fact(10))"  # IndentationError/Recursion
-    )
-    buffer.add(
-        prompt="Query system CPU utilization safely.",
-        chosen="import psutil\nprint(psutil.cpu_percent())",
-        rejected="import os\nos.system('rm -rf /')"  # Unsafe / illegal command
-    )
+    # 2. Experience Buffer with tokenized trajectories
+    buffer = ExperienceBuffer(max_capacity=512)
+    print("\n[Experience Replay] Logging tokenized execution trajectories...")
+
+    p1 = tokenizer.encode("Write Python code to compute 10 factorial.")
+    c1 = tokenizer.encode("import math\nprint(math.factorial(10))")
+    r1 = tokenizer.encode("def fact(n):\nreturn n * fact(n-1)\nprint(fact(10))")
+    buffer.add(p1, c1, r1)
+
+    p2 = tokenizer.encode("Query system CPU utilization safely.")
+    c2 = tokenizer.encode("import psutil\nprint(psutil.cpu_percent())")
+    r2 = tokenizer.encode("import os\nos.system('rm -rf /')")
+    buffer.add(p2, c2, r2)
+
     print(f"  Buffer populated with {len(buffer)} episodes.")
 
-    # 3. Test Direct Preference Optimization Loss Calculation
-    print("\n[DPO Optimization] Computing initial DPO step...")
-    trainer = IdleTrainer(model, tokenizer, buffer, lora_params, lr=5e-4, batch_size=2, beta=0.1)
+    # 3. Test Dynamic Batch Collation
+    print("\n[Batch Collation] Testing dynamic padding collation...")
+    batch = buffer.sample_batch(batch_size=2, pad_token_id=tokenizer.pad_id)
+    print(f"  Chosen Input Shape:   {batch['chosen_input_ids'].shape}")
+    print(f"  Chosen Mask Shape:    {batch['chosen_response_mask'].shape}")
+    print(f"  Rejected Input Shape: {batch['rejected_input_ids'].shape}")
+
+    # 4. Compute Direct Preference Optimization Loss
+    print("\n[DPO Optimization] Computing initial DPO step with gradient accumulation...")
+    trainer = IdleTrainer(
+        model=model,
+        tokenizer=tokenizer,
+        buffer=buffer,
+        lora_params=lora_params,
+        lr=5e-4,
+        batch_size=2,
+        grad_accum_steps=2,
+        beta=0.1
+    )
 
     metrics = await trainer.train_step()
     print(f"  Step 1 Result: Loss = {metrics['dpo_loss']:.4f}")
@@ -418,13 +492,15 @@ async def main():
     print(f"  Implicit Reward (Rejected): {metrics['reward_rejected']:.4f}")
     print(f"  Preference Margin (Δ):      {metrics['reward_margin']:.4f}")
 
-    # 4. Demonstrate Zero-Copy Reference Toggling
-    print("\n[Adapter Toggle Test] Verifying zero-copy reference bypass...")
-    dummy_x = torch.randint(0, tokenizer.vocab_size, (1, 16))
+    # 5. In-Place LoRA Toggle Verification
+    print("\n[Adapter Toggle Test] Verifying in-place lora_enabled bypass...")
+    dummy_input = torch.randint(0, tokenizer.vocab_size, (1, 16))
     with torch.no_grad():
-        out_active = model(dummy_x)
-        with disable_adapters(model):
-            out_reference = model(dummy_x)
+        set_lora_enabled(model, True)
+        out_active = model(dummy_input)
+
+        set_lora_enabled(model, False)
+        out_reference = model(dummy_input)
 
     delta = torch.abs(out_active - out_reference).sum().item()
     print(f"  L1 Delta between active LoRA policy and base reference: {delta:.6f}")
