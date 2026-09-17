@@ -466,7 +466,9 @@ class MemoryState:
         async with self._lock:
             self._context.append({"role": role, "content": content})
             if len(self._context) > self.max_items:
-                self._context.pop(0)
+                # If slot 0 is system_telemetry, pop slot 1 to preserve ambient telemetry at index 0
+                pop_idx = 1 if (self._context and self._context[0].get("role") == "system_telemetry") else 0
+                self._context.pop(pop_idx)
 
     async def get_context(self) -> List[Dict[str, str]]:
         async with self._lock:
