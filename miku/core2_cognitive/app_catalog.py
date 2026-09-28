@@ -310,10 +310,13 @@ def normalize_command_text(text: str) -> str:
 
 GENERIC_APP_PLACEHOLDERS = {
     "something", "anything", "whatever", "stuff", "an app", "app", "apps",
-    "a program", "program", "programs", "software", "some app", "some game",
-    "something to play", "something fun", "item", "items", "things", "something to do",
-    "something new", "something to open"
+    "an application", "application", "applications", "a program", "program",
+    "programs", "software", "some app", "some game", "something to play",
+    "something fun", "item", "items", "things", "something to do",
+    "something new", "something to open", "an", "a", "one", "tool", "tools",
+    "utility", "utilities", "game", "games"
 }
+
 
 def predict_app(raw_name: str) -> Tuple[str, Dict[str, Any]]:
     """

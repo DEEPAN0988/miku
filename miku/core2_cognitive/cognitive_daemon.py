@@ -2,11 +2,14 @@
 Core 2: Cognitive Router (Brain & Memory).
 Integrates Grammar Parsing, OS State Tracking, Okapi BM25 Memory,
 and CDSH Multi-Modal Fusion. Outputs Actions to Core 3.
+Upgraded with zero-cloud, classical NLP safety, discourse, teaching confirmation,
+destructive gates, pronoun verification, and calibrated intent classification.
 """
 import time
 import uuid
 from multiprocessing import Queue
 from typing import Dict, Any, Optional, Tuple, List
+import re
 
 from miku.core2_cognitive.grammar_router import DeterministicGrammarRouter
 from miku.core2_cognitive.state_tracker import OSStateTracker
@@ -15,7 +18,7 @@ from miku.core2_cognitive.cdsh_router import CDSHRouter
 from miku.core2_cognitive.calibration_daemon import CalibrationDaemon
 from miku.core2_cognitive.realtime_learner import RealtimeLearner
 from miku.core2_cognitive.app_discovery import AppDiscovery
-import re
+from miku.core2_cognitive.app_catalog import GENERIC_APP_PLACEHOLDERS, APP_CATALOG, predict_app
 from miku.ipc.messages import (
     STTTranscriptMsg,
     VisionDetectionMsg,
@@ -40,6 +43,8 @@ class CognitiveDaemon:
         self.learner = RealtimeLearner()
         self.app_discovery = AppDiscovery()
         self.pending_clarification: Optional[Dict[str, Any]] = None
+        self.pending_teaching: Optional[Dict[str, Any]] = None
+        self.pending_destructive: Optional[Dict[str, Any]] = None
 
         from miku.core2_cognitive.custom_chat_engine import CustomChatEngine
         self.chat_engine = CustomChatEngine()
@@ -72,21 +77,125 @@ class CognitiveDaemon:
         self.latest_vision_detection = detection
         self.latest_vision_time = detection.timestamp
 
+    def _dispatch_confirmed_command(self, cmd: str, original_query: str) -> Dict[str, Any]:
+        """
+        Executes a user-confirmed action directly through the action queue.
+        """
+        now = time.time()
+        intent, action, params, s_lang = self.grammar.parse(cmd)
+        if not action:
+            clf_res = self.intent_classifier.predict(cmd.lower())
+            action = "close_app" if any(w in cmd.lower() for w in ("close", "shut down", "terminate", "kill")) else "delete_file"
+            params = self.slot_tagger.extract_slots(cmd.lower(), clf_res.get("top_intent", ""))
+
+        task_id = str(uuid.uuid4())[:8]
+        target = params.get("app") or params.get("target") or params.get("path") or ""
+        action_msg = ActionRequestMsg(
+            action_type=action or "dispatched_action",
+            target=target,
+            coords=None,
+            params=params,
+            task_id=task_id,
+            is_compound=False,
+            timestamp=now
+        )
+        self.action_queue.put(action_msg)
+        return {
+            "query": original_query,
+            "status": "dispatched",
+            "task_id": task_id,
+            "best_action": action,
+            "confidence": 1.0,
+            "action_msg": action_msg,
+            "message": f"Confirmed. Executed '{cmd}'."
+        }
+
     def handle_transcript(self, transcript: STTTranscriptMsg) -> Dict[str, Any]:
         """
-        Processes incoming transcript:
-        0. Multi-turn clarification dialogue, real-time learning, and category handling.
-        1. Deterministic Grammar parse.
-        2. OS Accessibility state snapshot.
-        3. Vision state check.
-        4. CDSH Fusion & Softmax evaluation.
-        5. Action dispatch or clarification generation.
+        Processes incoming transcript through Miku's complete cognitive pipeline:
+        - Multi-turn confirmations (teaching, destructive actions, category clarifications)
+        - Negation refusal and scope
+        - Compound command decomposition with sequential verification
+        - Pronoun resolution with target naming confirmation
+        - Safe spelling and domain lexicon rewriting
+        - Grammar routing & calibrated classifier fallback
+        - Multi-modal CDSH arbitration
         """
         now = time.time()
         text = transcript.text.strip()
         clean_lower = text.lower()
 
-        # Step -1: Active Learning Failure Review and Promotion
+        # Step -3: Pending teaching confirmation handling ("Link 'surf' to 'open edge'? (yes/no)")
+        if self.pending_teaching:
+            if clean_lower in ("yes", "y", "confirm", "sure", "proceed", "ok", "okay"):
+                alias = self.pending_teaching["alias"]
+                target = self.pending_teaching["target"]
+                self.cmd_lexicon.register_taught_word(alias, target)
+                self.learner.set_custom_alias(alias, target)
+                self.pending_teaching = None
+                return {
+                    "query": text,
+                    "status": "conversational_response",
+                    "message": f"Learned! I've linked '{alias}' to '{target}'.",
+                    "confidence": 1.0
+                }
+            elif clean_lower in ("no", "n", "cancel", "deny", "nevermind", "never mind", "abort"):
+                self.pending_teaching = None
+                return {
+                    "query": text,
+                    "status": "conversational_response",
+                    "message": "Cancelled teaching.",
+                    "confidence": 1.0
+                }
+            self.pending_teaching = None
+
+        # Step -2: Pending destructive action confirmation ("Close Notepad? (yes/no)")
+        if self.pending_destructive:
+            if clean_lower in ("yes", "y", "confirm", "sure", "proceed", "ok", "okay"):
+                cmd = self.pending_destructive["command"]
+                self.pending_destructive = None
+                return self._dispatch_confirmed_command(cmd, original_query=text)
+            elif clean_lower in ("no", "n", "cancel", "deny", "nevermind", "never mind", "abort"):
+                self.pending_destructive = None
+                return {
+                    "query": text,
+                    "status": "conversational_response",
+                    "message": "Cancelled.",
+                    "confidence": 1.0
+                }
+            self.pending_destructive = None
+
+        # Step -1A: Forget command ("forget <word>")
+        forget_m = re.match(r"^(?:please\s+)?forget\s+[\"']?([a-zA-Z0-9_\-\. ]+?)[\"']?$", clean_lower)
+        if forget_m:
+            word = forget_m.group(1).strip().lower()
+            lex_forgot = self.cmd_lexicon.forget_word(word)
+            learn_forgot = self.learner.forget_alias(word)
+            msg = f"I have forgotten '{word}'." if (lex_forgot or learn_forgot) else f"I do not have '{word}' stored in memory."
+            return {
+                "query": text,
+                "status": "conversational_response",
+                "message": msg,
+                "confidence": 1.0
+            }
+
+        # Step -1B: Show what you learned command
+        if clean_lower in (
+            "show what you learned", "show what you have learned", "show learned",
+            "what have you learned", "what have you learned so far", "what did you learn",
+            "show all learned preferences and aliases", "show all learned preferences",
+            "show memory", "show learning", "what do you know", "what have i taught you",
+            "list all aliases", "list learned words", "show aliases", "show all aliases"
+        ):
+            summary = self.cmd_lexicon.show_learned() + "\n" + self.learner.get_learned_summary()
+            return {
+                "query": text,
+                "status": "conversational_response",
+                "message": summary,
+                "confidence": 1.0
+            }
+
+        # Step -1C: Active Learning Failure Review and Promotion
         if clean_lower in ("show what you didn't understand", "review failures", "show learning failures", "what did you fail to understand", "what could you not understand"):
             return {
                 "query": text,
@@ -106,33 +215,83 @@ class CognitiveDaemon:
                 "confidence": 1.0
             }
 
-        # Step 0-RealtimeTeaching: Explicit real-time teaching (e.g. "when I say games open wuthering wave")
-        teach_res = self.learner.check_teaching_intent(text)
-        if teach_res:
-            trigger, target, confirm_msg = teach_res
-            self.cmd_lexicon.register_taught_word(trigger, target)
+        # Step 0-WordLearning: Dictionary definition learning ("learn word euphoria means a state of intense happiness")
+        word_learn = self.lexicon.check_word_learning_intent(text)
+        if word_learn:
             return {
                 "query": text,
                 "status": "conversational_response",
-                "message": confirm_msg,
+                "message": word_learn,
                 "confidence": 1.0
             }
 
-        # Step 0-UsableTeaching: Natural teaching ("when I say X I mean Y", "remember that X is Y", "call X Y", etc.)
+        # Step 0-CategoryTeaching: Category preference learning ("when I say games open wuthering wave")
+        real_teach = self.learner.check_teaching_intent(text)
+        if real_teach and real_teach[0] in ("games", "browser", "music", "editor", "social"):
+            trigger, target, msg = real_teach
+            return {
+                "query": text,
+                "status": "conversational_response",
+                "message": msg,
+                "confidence": 1.0
+            }
+
+        # Step 0-Teaching: Natural & explicit alias teaching with mandatory confirmation
         usable_teach = self.cmd_lexicon.check_teaching_intent(text)
-        if usable_teach:
-            alias = usable_teach["alias"]
-            target = usable_teach["target"]
-            self.cmd_lexicon.register_taught_word(alias, target)
-            self.learner.set_custom_alias(alias, target)
+        teach_candidate = usable_teach or ({"is_teaching": True, "is_valid": True, "alias": real_teach[0], "target": real_teach[1]} if real_teach else None)
+
+        if teach_candidate:
+            if not teach_candidate.get("is_valid", True):
+                return {
+                    "query": text,
+                    "status": "clarification_needed",
+                    "best_action": "ask_clarification",
+                    "message": f"I cannot learn that: {teach_candidate.get('validation_reason')}",
+                    "confidence": 1.0
+                }
+            alias = teach_candidate["alias"]
+            target = teach_candidate["target"]
+            self.pending_teaching = {"alias": alias, "target": target}
             return {
                 "query": text,
-                "status": "conversational_response",
-                "message": f"Learned! I've linked '{alias}' to '{target}'.",
+                "status": "confirmation_required",
+                "best_action": "ask_confirmation",
+                "message": f"Link '{alias}' to '{target}'? (yes/no)",
                 "confidence": 1.0
             }
 
-        # Step 0-Negation: Negation handling ("don't open notepad", "never mute sound", "not that one")
+
+        # Step 0-Compound: Multi-step compound commands ("open notepad and then turn up volume")
+        sub_commands = self.discourse.split_compound(text)
+        if len(sub_commands) > 1:
+            compound_results = []
+            for step_idx, sub_cmd in enumerate(sub_commands, 1):
+                sub_msg = STTTranscriptMsg(text=sub_cmd, confidence=transcript.confidence)
+                sub_res = self.handle_transcript(sub_msg)
+                compound_results.append(sub_res)
+
+                # Sequential Safety: Step N+1 runs only after Step N reports verified success
+                sub_status = sub_res.get("status")
+                if sub_status != "dispatched":
+                    return {
+                        "query": text,
+                        "status": sub_status or "compound_halted",
+                        "best_action": "compound",
+                        "confidence": 1.0,
+                        "stopped_at_step": step_idx,
+                        "sub_results": compound_results,
+                        "message": f"Step {step_idx} ('{sub_cmd}') stopped: {sub_res.get('message', 'action halted')}. Halting remaining steps."
+                    }
+            return {
+                "query": text,
+                "status": "dispatched",
+                "best_action": "compound",
+                "confidence": 1.0,
+                "sub_results": compound_results,
+                "message": f"Executing ordered compound sequence: {', '.join(sub_commands)}."
+            }
+
+        # Step 0-Negation: Negation handling ("don't open notepad", "never mute sound", "open chrome, not edge")
         neg_res = self.discourse.analyze_negation(text)
         if neg_res["has_negation"]:
             if neg_res["is_correction"] and neg_res["target_command"]:
@@ -147,37 +306,34 @@ class CognitiveDaemon:
                     "action_msg": None
                 }
 
-        # Step 0-Compound: Multi-step compound commands ("open notepad and then turn up volume")
-        sub_commands = self.discourse.split_compound(text)
-        if len(sub_commands) > 1:
-            compound_results = []
-            for sub_cmd in sub_commands:
-                sub_msg = STTTranscriptMsg(text=sub_cmd, confidence=transcript.confidence)
-                sub_res = self.handle_transcript(sub_msg)
-                compound_results.append(sub_res)
-            return {
-                "query": text,
-                "status": "dispatched",
-                "best_action": "compound",
-                "confidence": 1.0,
-                "sub_results": compound_results,
-                "message": f"Executing ordered compound sequence: {', '.join(sub_commands)}."
-            }
 
         # Step 0-Coreference: Pronoun resolution ("close it", "maximize it", "the second one", "do that again")
         coref_res = self.discourse.resolve_coreference(text, self.dialogue_stack.get_entity_context())
         if coref_res.get("is_resolved") and coref_res.get("reconstructed"):
+            if coref_res.get("requires_confirmation"):
+                self.pending_destructive = {
+                    "command": coref_res["reconstructed"],
+                    "target": coref_res.get("resolved_entity", "")
+                }
+                return {
+                    "query": text,
+                    "status": "confirmation_required",
+                    "best_action": "ask_confirmation",
+                    "confidence": 1.0,
+                    "message": coref_res["confirmation_prompt"]
+                }
             text = coref_res["reconstructed"]
             clean_lower = text.lower()
 
-        # Step 0-Norm: English Lexicon typo normalization (e.g. 'undrestand' -> 'understand', 'opne' -> 'open')
+        # Step 0-Norm: English Lexicon typo normalization
         norm = self.normalizer.normalize(text)
-        speller_res = self.safe_speller.correct_sentence(norm["normalized"])
+        taught_rewritten = self.cmd_lexicon.rewrite_taught_terms(norm["normalized"])
+        speller_res = self.safe_speller.correct_sentence(taught_rewritten)
         text = self.cmd_lexicon.rewrite_taught_terms(speller_res["corrected"])
         clean_lower = text.lower()
 
-        # Step 0-Destructive: Safeguard destructive actions (delete, wipe, format, rm, kill process)
-        destructive_pat = r"\b(?:delete|remove|format|wipe|destroy|erase|kill\s+process|rm\s+-rf|drop\s+table|transfer\s+\d+|send\s+an?\s+email)\b"
+        # Step 0-Destructive: Safeguard destructive actions (delete, wipe, format, rm, kill process, overwrite)
+        destructive_pat = r"\b(?:delete|remove|format|wipe|destroy|erase|overwrite|kill\s+process|rm\s+-rf|drop\s+table|transfer\s+\d+|send\s+an?\s+email)\b"
         if re.search(destructive_pat, clean_lower) and not re.search(r"\b(?:close|quit|exit|shut\s+down)\s+(?:notepad|calculator|edge|chrome|wuthering|app|window)\b", clean_lower):
             return {
                 "query": text,
@@ -187,7 +343,19 @@ class CognitiveDaemon:
                 "message": f"This command involves a potentially destructive action ('{text}'). Explicit user confirmation is required to proceed. Do you wish to confirm?"
             }
 
-        # Step 0-Train: Training Intent ("train miku to understand english words", "train english", "train words")
+        # Step 0-OutOfScope: Explicit out-of-scope filter for non-computer requests
+        # Prevents false actions on clearly non-OS phrases
+        oos_pat = r"\b(?:sing(?:\s+me)?(?:\s+a)?\s+(?:song|melody|tune)|dance\s+for\s+me|tell\s+me\s+a\s+(?:joke|story)|what(?:'s|\s+is)\s+the\s+weather|read\s+me\s+a\s+(?:book|story)|give\s+me\s+a\s+hug|make\s+me\s+(?:coffee|tea|food)|cook\s+for\s+me)\b"
+        if re.search(oos_pat, clean_lower):
+            return {
+                "query": text,
+                "status": "conversational_response",
+                "best_action": None,
+                "confidence": 1.0,
+                "message": "I'm a computer assistant — I can open apps, manage files, and handle system tasks, but that's a bit outside what I can do!"
+            }
+
+        # Step 0-Train: Training Intent
         if re.search(r"\b(?:train\s+miku|train\s+english|train\s+words?|train\s+vocabulary|train\s+language)\b", clean_lower):
             train_metrics = self.chat_engine.train_english_language(epochs=5)
             from miku.core2_cognitive.calibration_daemon import PHONETIC_BALANCED_SCRIPT
@@ -195,7 +363,7 @@ class CognitiveDaemon:
                 self.calibration.enroll_voice_phrase(p)
             calib_metrics = self.calibration.get_calibration_metrics()
             stats = self.lexicon.get_lexicon_stats()
-            
+
             resp = (
                 f"Training complete! I have calibrated my neural language model and English vocabulary.\n"
                 f"  • Vocabulary indexed: {train_metrics['vocab_size']} tokens ({stats['total_vocabulary_count']} English words)\n"
@@ -222,18 +390,8 @@ class CognitiveDaemon:
                 "confidence": 1.0
             }
 
-        # Step 0-WordLearn: Teaching a New English Word ("learn word serendipity means ...")
-        learn_word_res = self.lexicon.check_word_learning_intent(text)
-        if learn_word_res:
-            return {
-                "query": text,
-                "status": "conversational_response",
-                "message": learn_word_res,
-                "confidence": 1.0
-            }
-
-        # Step 0A: Multi-Turn Clarification Resolution (e.g. user answering "wuthering waves" or "1")
-        if self.pending_clarification and (now - self.pending_clarification.get("time", 0.0) < 180.0):
+        # Step 0-PendingClarification: Multi-turn response
+        if self.pending_clarification:
             cat = self.pending_clarification["category"]
             options = self.pending_clarification["options"]
 
@@ -245,7 +403,6 @@ class CognitiveDaemon:
             elif clean_lower in ("3", "third", "the third one", "third one") and len(options) >= 3:
                 selected_app = options[2]
             else:
-                from miku.core2_cognitive.app_catalog import predict_app, APP_CATALOG
                 cand_canonical, _ = predict_app(clean_lower)
                 for opt in options:
                     opt_canonical, _ = predict_app(opt)
@@ -257,12 +414,10 @@ class CognitiveDaemon:
                     selected_app = cand_canonical
 
             if selected_app:
-                if cat != "general":
-                    self.learner.set_category_preference(cat, selected_app)
+                clarification_category = (self.pending_clarification or {}).get("category")
                 self.pending_clarification = None
 
                 task_id = str(uuid.uuid4())[:8]
-                from miku.core2_cognitive.app_catalog import predict_app
                 canonical, info = predict_app(selected_app)
                 action_msg = ActionRequestMsg(
                     action_type="open_app",
@@ -274,10 +429,10 @@ class CognitiveDaemon:
                     timestamp=now
                 )
                 self.action_queue.put(action_msg)
+                # Persist preference so next "open games" dispatches directly
+                if clarification_category and clarification_category not in ("general",):
+                    self.learner.set_category_preference(clarification_category, canonical)
                 msg_text = f"Opening {info.get('display_name', selected_app)}!"
-                if cat != "general":
-                    cat_singular = cat[:-1] if cat.endswith("s") else cat
-                    msg_text += f" I've learned this as your preferred {cat_singular}."
                 return {
                     "query": text,
                     "status": "dispatched",
@@ -287,7 +442,8 @@ class CognitiveDaemon:
                     "action_msg": action_msg,
                     "message": msg_text
                 }
-            elif clean_lower in ("cancel", "nevermind", "stop", "abort", "no"):
+
+            elif clean_lower in ("cancel", "nevermind", "never mind", "stop", "abort", "no"):
                 self.pending_clarification = None
                 return {
                     "query": text,
@@ -297,37 +453,8 @@ class CognitiveDaemon:
                 }
             self.pending_clarification = None
 
-        # Step 0B: Real-time Teaching Intent (e.g. "when I say games open wuthering wave")
-        teach_res = self.learner.check_teaching_intent(text)
-        if teach_res:
-            trigger, target, confirm_msg = teach_res
-            return {
-                "query": text,
-                "status": "conversational_response",
-                "message": confirm_msg,
-                "confidence": 1.0
-            }
-
-        # Step 0C: Query or Reset Learned Knowledge
-        if clean_lower in ("what have you learned", "show learned preferences", "show learning", "what did you learn", "show memory"):
-            return {
-                "query": text,
-                "status": "conversational_response",
-                "message": self.learner.get_learned_summary(),
-                "confidence": 1.0
-            }
-        if clean_lower in ("reset learning", "clear learned memory", "forget preferences", "clear memory"):
-            self.learner.reset()
-            self.cmd_lexicon.reset()
-            return {
-                "query": text,
-                "status": "conversational_response",
-                "message": "I've reset all learned preferences and custom aliases.",
-                "confidence": 1.0
-            }
-
-        # Step 0D-0: Generic / Ambiguous Open Intent (e.g. "open something", "play something", "launch something", "open an app")
-        if re.match(r"^(?:(?:open(?:\s+up)?|launch|play|start|run|suggest)\s+)?(?:something|anything|whatever|stuff|an?\s+app|some\s+app|a\s+program|some\s+game)(?:\s+(?:to\s+play|to\s+do|fun))?$", clean_lower) or \
+        # Step 0D-0: Generic / Ambiguous Open Intent
+        if re.match(r"^(?:(?:open(?:\s+up)?|launch|play|start|run|suggest)\s+)?(?:something|anything|whatever|stuff|an?\s+app|an?\s+application|applications?|tools?|some\s+app|a\s+program|some\s+game)(?:\s+(?:to\s+play|to\s+do|fun))?$", clean_lower) or \
            re.match(r"^(?:what\s+should\s+i\s+(?:open|play|run)|suggest\s+(?:an?\s+app|a\s+game|something)|what\s+can\s+i\s+(?:open|play))$", clean_lower):
             games = self.app_discovery.get_apps_in_category("games") or ["Wuthering Waves"]
             options = [games[0], "Microsoft Edge", "Notepad", "Calculator"]
@@ -362,7 +489,6 @@ class CognitiveDaemon:
         if cat_match:
             preferred = self.learner.get_category_preference(cat_match)
             if preferred:
-                from miku.core2_cognitive.app_catalog import predict_app
                 canonical, info = predict_app(preferred)
                 task_id = str(uuid.uuid4())[:8]
                 action_msg = ActionRequestMsg(
@@ -414,7 +540,7 @@ class CognitiveDaemon:
                         "message": clarify_msg
                     }
 
-        # Step 0E: Apply custom user alias mappings (e.g. user taught "diary" -> "notepad")
+        # Step 0E: Apply custom user alias mappings
         parsed_text = text
         for al, target in self.learner.data.get("custom_aliases", {}).items():
             if al in clean_lower:
@@ -456,19 +582,35 @@ class CognitiveDaemon:
                     params = slots
                     s_lang = c_conf
 
-                    # App prediction / normalization if app or target slot
                     if "app" in params:
-                        from miku.core2_cognitive.app_catalog import predict_app
                         c_app, c_info = predict_app(params["app"])
                         params["app"] = c_app
                         params["app_info"] = c_info
                     if "target" in params and action == "close_app":
-                        from miku.core2_cognitive.app_catalog import predict_app
                         c_tgt, c_info = predict_app(params["target"])
                         params["target"] = c_tgt
                         params["app_info"] = c_info
             else:
                 self.active_learning.log_failure(parsed_text, "low_confidence_intent", clf_res["confidence"], clf_res["top_intent"])
+                # If conversational or QA query, let chat engine handle it
+                if re.match(r"^(?:who|what|why|how|when|where|tell\s+me|do\s+you|are\s+you|can\s+you|could\s+you|would\s+you)\b", clean_lower):
+                    chat_reply = self.chat_engine.respond(text)
+                    return {
+                        "query": text,
+                        "status": "conversational_response",
+                        "message": chat_reply,
+                        "confidence": 1.0
+                    }
+
+
+                # Otherwise, ask clarifying question offering top candidates
+                return {
+                    "query": text,
+                    "status": "clarification_needed",
+                    "best_action": "ask_clarification",
+                    "confidence": clf_res["confidence"],
+                    "message": clf_res["clarification_prompt"]
+                }
 
         # 2. OS State snapshot
         os_state = self.state_tracker.capture_active_state()
@@ -479,7 +621,6 @@ class CognitiveDaemon:
         s_vision = 0.0
         dt_vision = (now - self.latest_vision_time) if self.latest_vision_detection else 999.0
         if self.latest_vision_detection:
-            # Check affinity if vision target matches
             target_label = params.get("color", "") or params.get("target", "")
             if target_label and target_label in self.latest_vision_detection.label.lower():
                 s_vision = self.latest_vision_detection.confidence
@@ -534,7 +675,6 @@ class CognitiveDaemon:
         if best_act == action and confidence >= self.cdsh.threshold and action is not None:
             if action == "open_app":
                 target_app = (params.get("app") or params.get("target") or "").strip().lower()
-                from miku.core2_cognitive.app_catalog import GENERIC_APP_PLACEHOLDERS, APP_CATALOG
                 if target_app in GENERIC_APP_PLACEHOLDERS or params.get("app_info", {}).get("category") == "generic_placeholder":
                     games = self.app_discovery.get_apps_in_category("games") or ["Wuthering Waves"]
                     options = [games[0], "Microsoft Edge", "Notepad", "Calculator"]
@@ -603,7 +743,6 @@ class CognitiveDaemon:
             decision_result["task_id"] = task_id
             decision_result["action_msg"] = action_msg
         else:
-            # Open-ended conversational query: Engage custom Causal Transformer
             chat_reply = self.chat_engine.respond(text)
             decision_result["status"] = "conversational_response"
             decision_result["message"] = chat_reply
@@ -611,7 +750,4 @@ class CognitiveDaemon:
         return decision_result
 
     def handle_action_completion(self, result: ActionResultMsg):
-        """
-        Unlocks compound task decay clock.
-        """
         self.cdsh.release_task_lock(result.task_id)

@@ -16,17 +16,28 @@ DESTRUCTIVE_WORDS = {"delete", "remove", "kill", "format", "wipe", "drop", "term
 DOMAIN_VOCABULARY = {
     # Action verbs
     "open": 100, "launch": 90, "start": 80, "run": 70, "close": 95, "shut": 75, "quit": 65, "exit": 60,
+    "terminate": 90, "kill": 80,  # close-app synonyms — must be in vocab to avoid false corrections
     "volume": 90, "sound": 85, "audio": 80, "mute": 85, "unmute": 80, "increase": 70, "decrease": 70,
-    "turn": 85, "crank": 60, "lower": 70, "raise": 70, "boost": 60, "silence": 75,
+    "turn": 85, "crank": 60, "boost": 60, "silence": 75,
     "screenshot": 90, "screen": 80, "capture": 75, "snap": 70,
     "camera": 75, "webcam": 70, "inspect": 60, "check": 80,
-    "file": 90, "folder": 80, "document": 70, "note": 75, "create": 80, "make": 75, "search": 85, "find": 85,
+    "file": 90, "folder": 95, "document": 70, "note": 75, "create": 80, "make": 75, "search": 85, "find": 85,
     "browse": 75, "navigate": 75, "extract": 70, "scrape": 70,
     "status": 80, "report": 75, "health": 70, "plan": 80, "schedule": 75, "task": 80,
     "automation": 70, "stop": 85, "abort": 80, "cancel": 85,
     "maximize": 70, "minimize": 70, "restore": 65, "window": 80,
     "button": 75, "icon": 75, "click": 80, "press": 75,
     "red": 70, "blue": 70, "green": 70, "yellow": 70,
+    # directional / adjective words (kept low to avoid ambiguity wins)
+    "lower": 55, "raise": 65, "upper": 55, "inner": 50,
+    # Common English words that are NOT commands (kept low frequency so they won't override domain words)
+    # These are here purely to prevent false spell-corrections (e.g. 'sing' -> 'find')
+    "sing": 40, "song": 40, "dance": 40, "cook": 40, "hug": 40, "tune": 40, "melody": 40,
+    "joke": 40, "story": 40, "weather": 40, "book": 40, "coffee": 40, "tea": 40, "food": 40,
+    "help": 50, "show": 55, "tell": 50, "give": 50, "play": 50, "read": 50, "write": 55,
+    "try": 45, "need": 45, "want": 45, "like": 45, "use": 50, "see": 45, "hear": 40,
+    "word": 50, "name": 50, "time": 50, "list": 55, "view": 55, "set": 55, "get": 55,
+
 
     # App entities
     "notepad": 95, "calculator": 95, "edge": 95, "chrome": 90,
@@ -131,7 +142,7 @@ class SafeSpeller:
         if len(sorted_cands) > 1:
             second_cand = sorted_cands[1]
             second_dist = candidates[second_cand]
-            if best_dist == second_dist and abs(self.vocab.get(best_cand, 0) - self.vocab.get(second_cand, 0)) < 15:
+            if best_dist == second_dist and abs(self.vocab.get(best_cand, 0) - self.vocab.get(second_cand, 0)) < 20:
                 # Ambiguous
                 return token, "ambiguous", sorted_cands[:3]
 

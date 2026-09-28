@@ -33,7 +33,10 @@ class DeterministicGrammarRouter:
 
             # OS & Application Control (Natural phrasing: open, launch, go to, visit, fire up, bring up)
             (r"^(?:open(?:\s+up)?|launch|start|fire\s+up|go\s+to|visit|take\s+me\s+to|bring\s+up|switch\s+to)\s+(?:the\s+)?(?P<app>[a-zA-Z0-9_\-\. ]+?)(?:\s+application|\s+app|\s+website|\s+site|\s+page)?$", "OPEN_APP", "open_app", {}),
-            (r"^(?:close(?:\s+down)?|shut(?:\s+down)?|exit(?:\s+from)?|terminate|kill|quit)\s+(?:the\s+)?(?P<target>[a-zA-Z0-9_\-\. ]+?)(?:\s+application|\s+app)?$", "CLOSE_APP", "close_app", {}),
+            # Polite / indirect open forms: "would you mind bringing up edge", "could you please open calculator"
+            # Also covers gerund forms after filler stripping: "bringing up edge", "launching edge"
+            (r"^(?:(?:would\s+you\s+mind|could\s+you\s+(?:please\s+)?|can\s+you\s+(?:please\s+)?|please)\s+)?(?:open(?:ing)?(?:\s+up)?|launch(?:ing)?|start(?:ing)?|fire\s+up|bring(?:ing)?\s+up|pull(?:ing)?\s+up|load(?:ing)?\s+up|boot(?:ing)?\s+up)\s+(?:the\s+)?(?P<app>[a-zA-Z0-9_\-\. ]+?)(?:\s+application|\s+app|\s+website|\s+site|\s+page|\s+for\s+me)?$", "OPEN_APP", "open_app", {}),
+            (r"^(?:close(?:\s+down)?|shut(?:\s+down)?|exit(?:\s+from)?|terminate|kill|quit)\s+(?:the\s+)?(?P<target>[a-zA-Z0-9_\-\. ]+?)(?:\s+application|\s+app)?(?:\s+(?:right\s+away|now|please|immediately))?$", "CLOSE_APP", "close_app", {}),
             (r"^(?:maximize|minimize|restore)\s+(?:window|app)$", "WINDOW_STATE", "window_state", {}),
             
             # System Volume & Media (Natural phrasing: volume up, turn up volume, increase sound, mute, unmute)

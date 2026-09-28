@@ -1,46 +1,5 @@
 {
-  "category_preferences": {
-    "games": "Wuthering Waves"
-  },
-  "custom_aliases": {
-    "diary": "notepad"
-  },
-  "history": [
-    {
-      "type": "custom_alias",
-      "alias": "diary",
-      "target": "notepad",
-      "time": 1790579749.6792293
-    },
-    {
-      "type": "category_preference",
-      "category": "games",
-      "target": "Wuthering Waves",
-      "time": 1790579749.6815827
-    },
-    {
-      "type": "custom_alias",
-      "alias": "diary",
-      "target": "notepad",
-      "time": 1790579764.4720533
-    },
-    {
-      "type": "category_preference",
-      "category": "games",
-      "target": "Wuthering Waves",
-      "time": 1790579764.4745202
-    },
-    {
-      "type": "custom_alias",
-      "alias": "diary",
-      "target": "notepad",
-      "time": 1790579765.4466884
-    },
-    {
-      "type": "category_preference",
-      "category": "games",
-      "target": "Wuthering Waves",
-      "time": 1790579765.4491591
-    }
-  ]
+  "category_preferences": {},
+  "custom_aliases": {},
+  "history": []
 }

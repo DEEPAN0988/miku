@@ -195,5 +195,144 @@ class TestNLPComponents(unittest.TestCase):
         summary = self.active_learning.format_review_summary()
         self.assertIn("unknown weird command", summary)
 
+    # --- 9. Task 4: Teaching Safety & Validation Tests ---
+    def test_09_teaching_validation_and_surf_i_mean_bug(self):
+        # Regression: 'surf i mean' parsing bug
+        res = self.lexicon.check_teaching_intent("when I say surf I mean open edge")
+        self.assertIsNotNone(res)
+        self.assertTrue(res["is_valid"])
+        self.assertEqual(res["alias"], "surf")
+        self.assertNotEqual(res["alias"], "surf i mean")
+        self.assertEqual(res["target"], "edge")
+
+    def test_09_ten_malformed_teaching_phrasings(self):
+        from miku.core2_cognitive.lexicon import validate_teaching
+
+        malformed_cases = [
+            ("", "notepad", "empty alias"),
+            ("one two three four five", "notepad", "alias longer than 4 words"),
+            ("notepad", "notepad", "self-reference"),
+            ("open", "close", "shadow core verb open"),
+            ("delete", "calculator", "shadow core verb delete"),
+            ("volume", "edge", "shadow core verb volume"),
+            ("terminate", "notepad", "shadow core verb terminate"),
+            ("surf", "", "empty target"),
+            ("surf but edge", "chrome", "connector word in alias"),
+            ("calc i mean", "calculator", "i mean in alias"),
+        ]
+
+        for alias, target, description in malformed_cases:
+            is_valid, reason = validate_teaching(alias, target)
+            self.assertFalse(is_valid, f"Failed on {description}: alias='{alias}', target='{target}' was incorrectly marked valid!")
+
+    def test_09_taught_destructive_alias_requires_confirmation_at_execution(self):
+        # Teach "cleanup" -> "delete file secret.txt"
+        from miku.core2_cognitive.cognitive_daemon import CognitiveDaemon
+        import queue
+        q1 = queue.Queue()
+        daemon = CognitiveDaemon(action_queue=q1)
+        daemon.learner.reset()
+        daemon.cmd_lexicon.reset()
+
+        # Step 1: Bare statement prompts confirmation
+        from miku.ipc.messages import STTTranscriptMsg
+        teach_msg = STTTranscriptMsg(text="when I say cleanup I mean delete file secret.txt", confidence=1.0)
+        res_teach = daemon.handle_transcript(teach_msg)
+        self.assertEqual(res_teach.get("status"), "confirmation_required")
+        self.assertIn("Link 'cleanup' to 'delete file secret.txt'?", res_teach.get("message", ""))
+
+        # Step 2: Confirm teaching
+        confirm_msg = STTTranscriptMsg(text="yes", confidence=1.0)
+        res_conf = daemon.handle_transcript(confirm_msg)
+        self.assertEqual(res_conf.get("status"), "conversational_response")
+        self.assertIn("Learned!", res_conf.get("message", ""))
+
+        # Step 3: Now user utters "cleanup" -> MUST trigger destructive confirmation gate!
+        exec_msg = STTTranscriptMsg(text="cleanup", confidence=1.0)
+        res_exec = daemon.handle_transcript(exec_msg)
+        self.assertEqual(res_exec.get("status"), "confirmation_required")
+        self.assertIn("delete file secret.txt", res_exec.get("message", ""))
+        self.assertIn("destructive", res_exec.get("message", "").lower())
+
+    def test_09_atomic_and_schema_validated_lexicon_writes(self):
+        # Register a valid word
+        rec = self.lexicon.register_taught_word("browserflow", "edge")
+        self.assertEqual(rec["canonical_target"], "edge")
+        self.assertTrue(self.lexicon.storage_path.exists())
+
+        # Test forget word
+        forgot = self.lexicon.forget_word("browserflow")
+        self.assertTrue(forgot)
+        self.assertNotIn("browserflow", self.lexicon.dynamic_lexicon)
+
+    # --- 10. Task 5: Pronoun & Compound Safety Tests ---
+    def test_10_pronoun_confirmation_names_resolved_target(self):
+        context = {"last_app": "notepad", "last_file": "report.pdf"}
+
+        # "close it" -> requires confirmation naming Notepad
+        res_close = self.discourse.resolve_coreference("close it", context)
+        self.assertTrue(res_close["is_resolved"])
+        self.assertTrue(res_close["requires_confirmation"])
+        self.assertEqual(res_close["confirmation_prompt"], "Close Notepad? (yes/no)")
+
+        # "delete it" -> requires confirmation naming report.pdf
+        res_del = self.discourse.resolve_coreference("delete it", context)
+        self.assertTrue(res_del["is_resolved"])
+        self.assertTrue(res_del["requires_confirmation"])
+        self.assertEqual(res_del["confirmation_prompt"], "Delete Report.pdf? (yes/no)")
+
+        # "maximize it" -> benign action, no confirmation required
+        res_max = self.discourse.resolve_coreference("maximize it", context)
+        self.assertTrue(res_max["is_resolved"])
+        self.assertFalse(res_max["requires_confirmation"])
+
+    def test_10_compound_command_sequential_halting(self):
+        from miku.core2_cognitive.cognitive_daemon import CognitiveDaemon
+        import queue
+        q1 = queue.Queue()
+        daemon = CognitiveDaemon(action_queue=q1)
+        daemon.learner.reset()
+
+        from miku.ipc.messages import STTTranscriptMsg
+
+        # Test A: Failing first step halts subsequent steps
+        # Step 1: "do not open edge" (negation refusal) -> must NOT run "open notepad"
+        res_fail = daemon.handle_transcript(STTTranscriptMsg(text="do not open edge and then open notepad", confidence=1.0))
+        self.assertEqual(res_fail.get("status"), "negation_refusal")
+        self.assertEqual(res_fail.get("stopped_at_step"), 1)
+        self.assertIn("stopped", res_fail.get("message", "").lower())
+        self.assertEqual(len(res_fail.get("sub_results", [])), 1)
+
+        # Test B: Destructive middle step halts sequence and requires confirmation
+        # Step 1: open notepad (success), Step 2: delete file secret.txt (requires confirmation), Step 3: turn up volume (must not run)
+        res_dest = daemon.handle_transcript(STTTranscriptMsg(text="open notepad and then delete file secret.txt and then turn up volume", confidence=1.0))
+        self.assertEqual(res_dest.get("status"), "confirmation_required")
+        self.assertEqual(res_dest.get("stopped_at_step"), 2)
+        self.assertEqual(len(res_dest.get("sub_results", [])), 2)
+
+        # Test C: "then" inside a quoted string is NOT split
+        parts = self.discourse.split_compound("create file 'then and now.txt'")
+        self.assertEqual(len(parts), 1)
+        self.assertEqual(parts[0], "create file 'then and now.txt'")
+
+    def test_10_negation_scope(self):
+        # "don't open edge but open chrome"
+        neg_a = self.discourse.analyze_negation("don't open edge but open chrome")
+        self.assertTrue(neg_a["has_negation"])
+        self.assertTrue(neg_a["is_correction"])
+        self.assertEqual(neg_a["target_command"], "open chrome")
+
+        # "open chrome, not edge"
+        neg_b = self.discourse.analyze_negation("open chrome, not edge")
+        self.assertTrue(neg_b["has_negation"])
+        self.assertTrue(neg_b["is_correction"])
+        self.assertEqual(neg_b["target_command"], "open chrome")
+
+        # "never mind"
+        neg_c = self.discourse.analyze_negation("never mind")
+        self.assertTrue(neg_c["has_negation"])
+        self.assertFalse(neg_c["is_correction"])
+
 if __name__ == "__main__":
     unittest.main()
+

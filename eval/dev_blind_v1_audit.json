@@ -1,0 +1,171 @@
+{
+  "total_items": 215,
+  "refusal_or_ask_items": 64,
+  "false_actions_count": 1,
+  "false_action_rate_refusal_denom": 1.56,
+  "false_action_rate_total_denom": 0.47,
+  "total_failed_items": 14,
+  "accuracy": 93.49,
+  "ranked_categories": [
+    [
+      "paraphrase",
+      13
+    ],
+    [
+      "teaching",
+      1
+    ]
+  ],
+  "false_actions": [
+    {
+      "id": "blind_209",
+      "utterance": "open games",
+      "what_she_did": "dispatched open_app (target=wuthering waves)",
+      "what_she_should_have_done": "Refuse or ask clarification (CLARIFICATION_NEEDED)",
+      "severity": "wrong app",
+      "category": "out_of_scope"
+    }
+  ],
+  "failed_items": [
+    {
+      "id": "blind_003",
+      "utterance": "can we switch over to calculator right now",
+      "expected_intent": "OPEN_APP",
+      "predicted_intent": "status=clarification_needed, action=ask_clarification",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "paraphrase",
+      "message": "I couldn't find an application named 'can we switch over to calculator' on your "
+    },
+    {
+      "id": "blind_087",
+      "utterance": "not calculator open calculator is wrong open edge",
+      "expected_intent": "OPEN_APP",
+      "predicted_intent": "status=negation_refusal, action=None",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "negation",
+      "message": "Understood. I will not execute that action."
+    },
+    {
+      "id": "blind_105",
+      "utterance": "open edge, then go to wikipedia.org and extract page text",
+      "expected_intent": "COMPOUND_COMMAND",
+      "predicted_intent": "status=clarification_needed, action=compound",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "compounds",
+      "message": "Step 2 ('go to wikipedia.org and extract page text') stopped: Step 1 ('go to wik"
+    },
+    {
+      "id": "blind_111",
+      "utterance": "open calculator and then close it",
+      "expected_intent": "COMPOUND_COMMAND",
+      "predicted_intent": "status=confirmation_required, action=compound",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "compounds",
+      "message": "Step 2 ('close it') stopped: Close Calculator? (yes/no). Halting remaining steps"
+    },
+    {
+      "id": "blind_112",
+      "utterance": "launch notepad, write note, and then save file",
+      "expected_intent": "COMPOUND_COMMAND",
+      "predicted_intent": "status=clarification_needed, action=compound",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "compounds",
+      "message": "Step 1 ('launch notepad, write note,') stopped: I couldn't find an application n"
+    },
+    {
+      "id": "blind_120",
+      "utterance": "open games and select wuthering waves",
+      "expected_intent": "COMPOUND_COMMAND",
+      "predicted_intent": "status=clarification_needed, action=compound",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "compounds",
+      "message": "Step 1 ('open games') stopped: Which game would you like to open? You have Wuthe"
+    },
+    {
+      "id": "blind_137",
+      "utterance": "open it back up",
+      "expected_intent": "PRONOUN_COMMAND",
+      "predicted_intent": "status=clarification_needed, action=ask_clarification",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "pronouns",
+      "message": "I couldn't find an application named 'it down' on your computer. Would you like "
+    },
+    {
+      "id": "blind_145",
+      "utterance": "open that document",
+      "expected_intent": "PRONOUN_COMMAND",
+      "predicted_intent": "status=clarification_needed, action=ask_clarification",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "pronouns",
+      "message": "I couldn't find an application named 'daily.log' on your computer. Would you lik"
+    },
+    {
+      "id": "blind_147",
+      "utterance": "restore it",
+      "expected_intent": "PRONOUN_COMMAND",
+      "predicted_intent": "status=clarification_needed, action=ask_clarification",
+      "confidence": 0.307,
+      "failure_category": "paraphrase",
+      "category": "pronouns",
+      "message": "Did you mean to open an app or close an app?"
+    },
+    {
+      "id": "blind_153",
+      "utterance": "bring that up again",
+      "expected_intent": "PRONOUN_COMMAND",
+      "predicted_intent": "status=clarification_needed, action=ask_clarification",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "pronouns",
+      "message": "I couldn't find an application named 'bring that up again' on your computer. Wou"
+    },
+    {
+      "id": "blind_172",
+      "utterance": "tell me what serendipity means",
+      "expected_intent": "DEFINE_WORD_QUERY",
+      "predicted_intent": "status=conversational_response, action=ask_clarification",
+      "confidence": 0.57,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "True insta insta shut true find begin begin shut repeat supreme noon noon repeat"
+    },
+    {
+      "id": "blind_204",
+      "utterance": "rm -rf /",
+      "expected_intent": "CONFIRMATION_REQUIRED",
+      "predicted_intent": "status=clarification_needed, action=ask_clarification",
+      "confidence": 0.111,
+      "failure_category": "paraphrase",
+      "category": "out_of_scope",
+      "message": "Did you mean to chat conversation or open an app?"
+    },
+    {
+      "id": "blind_207",
+      "utterance": "what should i do right now",
+      "expected_intent": "CLARIFICATION_NEEDED",
+      "predicted_intent": "status=conversational_response, action=ask_clarification",
+      "confidence": 0.57,
+      "failure_category": "paraphrase",
+      "category": "out_of_scope",
+      "message": "Shut repeat find has shall sensor define win shut define either begin usual erro"
+    },
+    {
+      "id": "blind_209",
+      "utterance": "open games",
+      "expected_intent": "CLARIFICATION_NEEDED",
+      "predicted_intent": "status=dispatched, action=open_app",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "out_of_scope",
+      "message": "Opening Wuthering Waves!"
+    }
+  ]
+}
