@@ -82,5 +82,75 @@ class TestCustomChatAndScene(unittest.TestCase):
         self.assertEqual(decision["status"], "conversational_response")
         self.assertIn("miku", decision["message"].lower())
 
+    def test_english_lexicon_and_typo_correction(self):
+        """
+        Verifies offline English vocabulary recognition and automatic typo correction.
+        """
+        from miku.core2_cognitive.english_lexicon import EnglishLexicon
+        lexicon = EnglishLexicon()
+
+        # Typo correction
+        self.assertEqual(lexicon.correct_spelling("undrestand"), "understand")
+        self.assertEqual(lexicon.correct_spelling("opne"), "open")
+        self.assertEqual(lexicon.correct_spelling("clsoe"), "close")
+        self.assertEqual(lexicon.correct_spelling("gmaes"), "games")
+        self.assertEqual(lexicon.correct_spelling("calcultor"), "calculator")
+
+        # Sentence normalization
+        norm = lexicon.normalize_sentence("opne gmaes please")
+        self.assertEqual(norm, "open games please")
+
+    def test_english_word_definitions_and_realtime_learning(self):
+        """
+        Verifies English word definition lookup and real-time word teaching.
+        """
+        from miku.core2_cognitive.english_lexicon import EnglishLexicon
+        lexicon = EnglishLexicon()
+
+        defn = lexicon.get_word_definition("sovereign")
+        self.assertIsNotNone(defn)
+        self.assertIn("supreme", defn["definition"].lower())
+
+        query_res = lexicon.check_definition_query("what does sovereign mean?")
+        self.assertIsNotNone(query_res)
+        self.assertIn("supreme", query_res.lower())
+
+        # Teach a new word
+        teach_res = lexicon.check_word_learning_intent("learn word serendipity means finding good things by chance")
+        self.assertIsNotNone(teach_res)
+        self.assertIn("serendipity", teach_res)
+
+        new_defn = lexicon.get_word_definition("serendipity")
+        self.assertIsNotNone(new_defn)
+        self.assertIn("finding good things", new_defn["definition"].lower())
+
+    def test_train_miku_english_command(self):
+        """
+        Verifies that asking Miku to train English words triggers the local neural trainer.
+        """
+        action_q = Queue()
+        daemon = CognitiveDaemon(action_queue=action_q)
+
+        msg = STTTranscriptMsg(text="train miku to understand english words", confidence=1.0)
+        decision = daemon.handle_transcript(msg)
+
+        self.assertEqual(decision["status"], "conversational_response")
+        self.assertIn("Training complete", decision["message"])
+        self.assertIn("metrics", decision)
+        self.assertGreater(decision["metrics"]["vocab_size"], 500)
+
+    def test_typo_resilience_in_command_routing(self):
+        """
+        Verifies that common typos like 'opne calcultor' are normalized and successfully dispatched.
+        """
+        action_q = Queue()
+        daemon = CognitiveDaemon(action_queue=action_q)
+
+        msg = STTTranscriptMsg(text="opne calcultor", confidence=1.0)
+        decision = daemon.handle_transcript(msg)
+
+        self.assertEqual(decision["status"], "dispatched")
+        self.assertEqual(decision["action_msg"].target, "calculator")
+
 if __name__ == "__main__":
     unittest.main()

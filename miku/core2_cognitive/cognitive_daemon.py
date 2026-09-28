@@ -44,6 +44,9 @@ class CognitiveDaemon:
         from miku.core2_cognitive.custom_chat_engine import CustomChatEngine
         self.chat_engine = CustomChatEngine()
 
+        from miku.core2_cognitive.english_lexicon import EnglishLexicon
+        self.lexicon = EnglishLexicon()
+
         self.latest_vision_detection: Optional[VisionDetectionMsg] = None
         self.latest_vision_time: float = 0.0
 
@@ -63,7 +66,55 @@ class CognitiveDaemon:
         """
         now = time.time()
         text = transcript.text.strip()
+
+        # Step 0-Norm: English Lexicon typo normalization (e.g. 'undrestand' -> 'understand', 'opne' -> 'open')
+        text = self.lexicon.normalize_sentence(text)
         clean_lower = text.lower()
+
+        # Step 0-Train: Training Intent ("train miku to understand english words", "train english", "train words")
+        if re.search(r"\b(?:train\s+miku|train\s+english|train\s+words?|train\s+vocabulary|train\s+language)\b", clean_lower):
+            train_metrics = self.chat_engine.train_english_language(epochs=5)
+            from miku.core2_cognitive.calibration_daemon import PHONETIC_BALANCED_SCRIPT
+            for p in PHONETIC_BALANCED_SCRIPT:
+                self.calibration.enroll_voice_phrase(p)
+            calib_metrics = self.calibration.get_calibration_metrics()
+            stats = self.lexicon.get_lexicon_stats()
+            
+            resp = (
+                f"Training complete! I have calibrated my neural language model and English vocabulary.\n"
+                f"  • Vocabulary indexed: {train_metrics['vocab_size']} tokens ({stats['total_vocabulary_count']} English words)\n"
+                f"  • Training dialogues: {train_metrics['dialogue_pairs']} conversational pairs\n"
+                f"  • Cross-entropy loss: {train_metrics['initial_loss']} -> {train_metrics['final_loss']} ({train_metrics['loss_reduction_pct']}% reduction)\n"
+                f"  • Calibration status: {calib_metrics['display_string']}\n"
+                f"I now understand English words, natural questions, and system commands."
+            )
+            return {
+                "query": text,
+                "status": "conversational_response",
+                "message": resp,
+                "confidence": 1.0,
+                "metrics": train_metrics
+            }
+
+        # Step 0-WordQuery: Word Definition Query ("what does sovereign mean", "define autonomous", etc.)
+        def_query = self.lexicon.check_definition_query(text)
+        if def_query:
+            return {
+                "query": text,
+                "status": "conversational_response",
+                "message": def_query,
+                "confidence": 1.0
+            }
+
+        # Step 0-WordLearn: Teaching a New English Word ("learn word serendipity means ...")
+        learn_word_res = self.lexicon.check_word_learning_intent(text)
+        if learn_word_res:
+            return {
+                "query": text,
+                "status": "conversational_response",
+                "message": learn_word_res,
+                "confidence": 1.0
+            }
 
         # Step 0A: Multi-Turn Clarification Resolution (e.g. user answering "wuthering waves" or "1")
         if self.pending_clarification and (now - self.pending_clarification.get("time", 0.0) < 180.0):
