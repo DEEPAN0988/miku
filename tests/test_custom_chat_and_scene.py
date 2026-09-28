@@ -6,7 +6,6 @@ import unittest
 import numpy as np
 from pathlib import Path
 import tempfile
-import torch
 
 from miku.core2_cognitive.custom_chat_engine import CustomChatEngine, CustomTokenizer, CustomCausalLM
 from miku.core4_vision.scene_understanding import CustomSceneUnderstanding
@@ -33,7 +32,7 @@ class TestCustomChatAndScene(unittest.TestCase):
         # Test model forward pass
         vocab_size = len(tok.vocab)
         model = CustomCausalLM(vocab_size=vocab_size, d_model=32, n_layers=2, n_heads=2, max_seq_len=64)
-        input_tensor = torch.tensor([encoded], dtype=torch.long)
+        input_tensor = np.array([encoded], dtype=np.int64)
         logits, _ = model(input_tensor)
         self.assertEqual(logits.shape, (1, len(encoded), vocab_size))
 

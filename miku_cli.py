@@ -81,10 +81,15 @@ def run_interactive():
                 orchestrator.cognitive_daemon.handle_action_completion(res)
                 orchestrator.logger.log_action(res.task_id, action.action_type, action.target, res.status, res.message)
                 print(f"  [Hands]  {res.status}: {res.message}")
+            elif status == "conversational_response":
+                print(f"  [Miku]   {decision.get('message')}")
             elif status == "clarification_needed":
                 print(f"  [Brain]  {decision.get('message')}")
             elif status == "calibration_required":
                 print(f"  [Alert]  {decision.get('message')}")
+            else:
+                msg_text = decision.get("message") or f"Acknowledged '{cmd}'."
+                print(f"  [Miku]   {msg_text}")
     finally:
         orchestrator.shutdown()
         print("\n[*] Miku shut down cleanly.")
