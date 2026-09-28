@@ -1,116 +1,41 @@
-# Product Requirements Document
-## Miku — Offline-First Personal AI Voice Assistant
+# MIKU: Sovereign Local Agent
+## Product Requirements Document & System Architecture
+**Version:** 1.1.0 (Zero-Model, Zero-API Framework — Revised)  
+**Date:** September 2026
 
 ---
 
-## 1. Overview
-
-Miku is a personal AI voice assistant, functionally similar to Alexa/Siri, built without relying on third-party cloud APIs or using pretrained models as opaque black boxes. It should run lightweight, work both offline and online, and eventually operate across Windows, Linux, and Android — starting with Windows.
-
-Miku should be able to hear, speak, see, plan, connect to other devices, and control the host system (and, with consent, paired devices).
+### Revision Notes
+- **Scope change:** This revision does not include anti-detection browser automation — CAPTCHA/bot-detection evasion or "indistinguishable from human" input synthesis. Automating your own logged-in browser sessions on sites you're authorized to use is in scope; defeating a site's bot-detection is not. Everything below assumes automation respects the target site's terms of service.
+- **Honesty pass:** Claims like "0% hallucination risk" and "instant latency" were marketing language, not engineering claims. This revision states the real tradeoffs of the zero-model approach directly — including where it will underperform a modern cloud AI assistant, not just where it wins.
 
 ---
 
-## 2. Goals
+### 1. Executive Summary
+Miku is an autonomous, on-device assistant built without pre-trained deep learning models (LLMs/transformers) and without cloud APIs. It uses classical machine learning, deterministic pattern matching, and OS-level automation to run tasks locally. The core tradeoff: predictability and total data privacy, in exchange for narrower language understanding than a modern LLM. Miku is not a drop-in replacement for a cloud AI assistant — it's a different tool, suited to a smaller set of well-defined, privacy-sensitive tasks.
 
-- Fully local-first operation: core loop (wake → hear → understand → act → speak) works with no internet connection.
-- No dependency on commercial AI APIs (OpenAI, Google, Amazon, etc.).
-- Every model used is either trained from scratch or fine-tuned/personalized on the user's own data — never used as an untouched frozen third-party weight file.
-- Lightweight enough to run continuously on a personal Windows machine without heavy GPU requirements.
-- Extensible command set that grows over time via retraining, not hardcoding alone.
-- Eventually reach parity, in scope of command coverage, with commercial assistants — and in coding-assistance ability, with general-purpose LLMs (stretch goal, long-term).
+### 2. Target Audience
+- **Privacy Maximalists:** Need a hard guarantee that no audio, text, or file content ever leaves the device, and accept reduced language flexibility for that guarantee.
+- **Power Users & Developers:** Want deep OS automation and are willing to write or tune command grammars rather than rely purely on free-form natural language.
+- **Low-Resource Environments:** Machines without the RAM/VRAM budget for a local LLM, where a rule-based system is the only viable option at all.
 
-## 3. Non-Goals / Explicit Constraints
+### 3. Core Functional Requirements
+- **3.1 Deterministic Intent Routing:** Parses natural-language commands and current OS window state to select from a fixed library of actions. Because this is pattern/grammar matching rather than a language model, it fails predictably.
+- **3.2 OS-Level Automation:** Interacts with the OS via UIAutomation and SendInput APIs to execute clicks, keystrokes, and UI navigation for tasks the user has explicitly configured.
+- **3.3 Authorized Browser Session Automation:** Drives the user's own already-authenticated Chrome session over Chrome DevTools Protocol (CDP) to fill forms, extract page data, and run multi-step web tasks.
+- **3.4 Offline Voice Processing:** Transcribes locally with a GMM-HMM acoustic model; synthesizes responses with TD-PSOLA concatenative synthesis.
+- **3.5 Reflective Self-Extension:** Generates new automation routines as sandboxed Python modules (via AST construction), tests them in isolation, and persists ones that pass validation.
 
-- **No CAPTCHA solving.** Out of scope — breaks most services' terms regardless of intent.
-- **No silent auto-pairing to new devices.** Every new device connection requires explicit user confirmation.
-- **No unconfirmed destructive/system-level actions.** File deletion, account logins, purchases, and system config changes always require a spoken or typed confirmation step.
-- Not attempting to out-train frontier LLMs from zero on commodity hardware — realistic scope is small, task-specific models plus personalized fine-tuning.
-
-## 4. Target Platform & Rollout
-
-| Phase | Platform | Status |
+### 4. Non-Functional Requirements
+| Requirement | Target | Reality Check |
 |---|---|---|
-| 1 | Windows | Current focus |
-| 2 | Linux | Planned |
-| 3 | Android | Planned (separate app, AccessibilityService-based) |
+| Latency | Audio-to-action < 150ms for in-vocabulary commands | Achievable for the fixed action set; disambiguation/clarification paths have their own budget |
+| Resource Footprint | Peak RAM < 500MB, no GPU required | Realistic for GMM-HMM + BM25 + rule engine |
+| Network Independence | 0 bytes external traffic for core cognitive engine | True for router/memory/voice core; CDP web automation uses local network directly to sites |
 
-## 5. Core Capabilities (Functional Requirements)
-
-### 5.1 Hear
-- Continuous local wake-word detection (custom-trained, low CPU footprint).
-- Speech-to-text on command capture, tuned/fine-tuned on the user's voice and vocabulary.
-- Support for external mic / hearing input devices (Bluetooth headset, USB mic).
-
-### 5.2 Speak
-- Local text-to-speech output through system speaker or connected audio device.
-- Voice trained/fine-tuned on a dataset the user assembles (not a shipped, unmodified voice model).
-
-### 5.3 See
-- Camera input: recognize objects/state in the room when asked.
-- Screen input: read what's currently on-screen to report status or locate UI elements to act on.
-
-### 5.4 Understand (NLU / Intent Parsing)
-- Rule-based slot filling plus a small trained classifier mapping utterances to {intent, entities}.
-- Must support open-ended, non-enumerated commands (e.g., "write an essay in Notepad about X") without hardcoding every possible task.
-- Retrainable as new intents/commands are added.
-
-### 5.5 Plan
-- Day/task planning based on user-stated goals ("plan my day," "how should I train for X").
-- Logic/rules engine over calendar and task data — no ML strictly required here.
-
-### 5.6 Connect
-- Discover and connect to Bluetooth, Wi-Fi, and other local devices.
-- **Always prompts before connecting to a new device.**
-- Re-authentication flow: if a previously paired device's credentials changed, Miku asks the user for the new password/requirement rather than guessing or retrying blindly.
-
-### 5.7 Control
-- **Local system control (Windows):**
-  - CLI / PowerShell command execution
-  - App launching and in-app actions (open Notepad → write essay, etc.)
-  - Mouse (LMB/RMB/MMB) and cursor control, keyboard/text input
-  - System administration tasks (files, processes, services) — gated by confirmation for anything destructive or elevated-privilege
-- **Connected device control** (once explicitly paired and authorized):
-  - Download/delete/edit/search files
-  - Send messages / calls (where the platform and permissions allow)
-  - App installs from trusted sources (app store first, then web-based source; untrusted sources trigger a warning + risk rating before proceeding)
-- **Network awareness:** before executing a network-dependent command (e.g., downloading an app), Miku checks connectivity; if offline, it can enable it itself only for its own device's known/trusted networks — for anything requiring new credentials, it asks the user.
-
-## 6. Non-Functional Requirements
-
-- **Lightweight:** designed to run continuously in the background on consumer Windows hardware without dedicated GPU dependency (GPU acceptable for training, not required for inference).
-- **Responsiveness:** wake-to-listening latency and command-to-action latency should feel conversational, not batch-processed.
-- **Robustness:** should degrade gracefully offline (reduced capability, not failure) and recover automatically when connectivity returns.
-- **Privacy:** all audio/video/system data stays local unless the user explicitly sends it somewhere.
-
-## 7. Safety & Consent Requirements
-
-- Confirmation required before: any file deletion, any purchase/payment action, any new device pairing, any account login, any elevated/admin command.
-- Miku must clearly state what it's about to do before doing it, for any action outside a short trusted allowlist (e.g., "open Notepad" doesn't need confirmation; "delete file X" does).
-- Risk-rating shown to the user before installing from an untrusted source.
-
-## 8. Success Metrics
-
-- Wake-word false-accept / false-reject rate under a defined threshold.
-- Command recognition accuracy on the user's own voice/vocabulary.
-- % of the initial 15–20 target commands executed correctly end-to-end (voice in → action → voice confirmation out).
-- Stable multi-hour background operation without memory/resource leaks.
-
-## 9. Phased Roadmap
-
-1. Wake-word detector (data collection + model)
-2. ASR pipeline (base + personal fine-tune)
-3. Intent parser covering 10–15 core commands
-4. Windows control layer executing those intents, confirmation-gated
-5. TTS for responses/confirmations
-6. Expand vocabulary + add Plan module
-7. Add See (camera/screen) module
-8. Add Connect module (Bluetooth/Wi-Fi device management)
-9. Port control layer to Linux
-10. Build Android companion app
-
-## 10. Open Risks
-
-- Full from-scratch ASR/TTS training requires substantial data collection and compute; realistic mitigation is personalized fine-tuning of small open architectures rather than shipped frozen models.
-- Broad system/device control surface increases security exposure — mitigated by the confirmation-gate requirement in Section 7.
-- Android porting cannot reuse the Windows control layer at all; budget it as a near-separate project.
+### 5. System Topology
+Four isolated CPU processes communicating over IPC:
+1. **Core 1: Audio Daemon (Sensory & Voice):** NLMS acoustic echo cancellation, GMM-HMM STT, TD-PSOLA TTS. Raw PCM never written to disk.
+2. **Core 2: Cognitive Router (Brain & Memory):** UIAutomation state tracker, CDSH intent router, SQLite + Okapi BM25 memory, Day-Zero calibration daemon.
+3. **Core 3: Execution Engine (Hands):** OS action executor, minimum-jerk cursor motion, closed-loop verification, CDP browser driver, AST sandbox.
+4. **Core 4: Vision Daemon (Eyes - v1.2.0):** Viola-Jones face/object detection with Haar-like features & integral image, frame differencing + Lucas-Kanade optical flow, Kalman filter object tracking, HSV color/region segmentation. Feeds detections to Core 2.
