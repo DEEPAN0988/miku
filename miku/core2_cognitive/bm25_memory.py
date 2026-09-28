@@ -18,26 +18,30 @@ class BM25Memory:
         self._init_db()
 
     def _init_db(self):
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS memory_docs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    doc_key TEXT UNIQUE,
-                    content TEXT NOT NULL,
-                    category TEXT,
-                    created_at REAL
-                )
-            """)
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS term_index (
-                    term TEXT,
-                    doc_id INTEGER,
-                    tf INTEGER,
-                    PRIMARY KEY(term, doc_id)
-                )
-            """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_term ON term_index(term)")
-            conn.commit()
+        conn = sqlite3.connect(self.db_path)
+        try:
+            with conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS memory_docs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        doc_key TEXT UNIQUE,
+                        content TEXT NOT NULL,
+                        category TEXT,
+                        created_at REAL
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS term_index (
+                        term TEXT,
+                        doc_id INTEGER,
+                        tf INTEGER,
+                        PRIMARY KEY(term, doc_id)
+                    )
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_term ON term_index(term)")
+                conn.commit()
+        finally:
+            conn.close()
 
     def _tokenize(self, text: str) -> List[str]:
         """
@@ -62,24 +66,28 @@ class BM25Memory:
             tf_map[t] = tf_map.get(t, 0) + 1
 
         import time
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT OR REPLACE INTO memory_docs (doc_key, content, category, created_at)
-                VALUES (?, ?, ?, ?)
-            """, (key, content, category, time.time()))
-            doc_id = cursor.lastrowid
-            if not doc_id:
-                cursor.execute("SELECT id FROM memory_docs WHERE doc_key = ?", (key,))
-                doc_id = cursor.fetchone()[0]
-
-            cursor.execute("DELETE FROM term_index WHERE doc_id = ?", (doc_id,))
-            for term, tf in tf_map.items():
+        conn = sqlite3.connect(self.db_path)
+        try:
+            with conn:
+                cursor = conn.cursor()
                 cursor.execute("""
-                    INSERT INTO term_index (term, doc_id, tf) VALUES (?, ?, ?)
-                """, (term, doc_id, tf))
-            conn.commit()
-            return doc_id
+                    INSERT OR REPLACE INTO memory_docs (doc_key, content, category, created_at)
+                    VALUES (?, ?, ?, ?)
+                """, (key, content, category, time.time()))
+                doc_id = cursor.lastrowid
+                if not doc_id:
+                    cursor.execute("SELECT id FROM memory_docs WHERE doc_key = ?", (key,))
+                    doc_id = cursor.fetchone()[0]
+
+                cursor.execute("DELETE FROM term_index WHERE doc_id = ?", (doc_id,))
+                for term, tf in tf_map.items():
+                    cursor.execute("""
+                        INSERT INTO term_index (term, doc_id, tf) VALUES (?, ?, ?)
+                    """, (term, doc_id, tf))
+                conn.commit()
+                return doc_id
+        finally:
+            conn.close()
 
     def search(self, query: str, top_k: int = 3, min_score: float = 0.5) -> List[Dict[str, Any]]:
         """
@@ -90,7 +98,8 @@ class BM25Memory:
         if not query_tokens:
             return []
 
-        with sqlite3.connect(self.db_path) as conn:
+        conn = sqlite3.connect(self.db_path)
+        try:
             cursor = conn.cursor()
 
             # Total docs count N
@@ -143,3 +152,5 @@ class BM25Memory:
                         "score": round(score, 4)
                     })
             return results
+        finally:
+            conn.close()

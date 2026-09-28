@@ -184,5 +184,102 @@ class TestCore2Cognitive(unittest.TestCase):
             gc.collect()
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_wuthering_waves_vs_whatsapp_separation(self):
+        """
+        Guarantees 'wuthering wave' never falsely collides with WhatsApp 'wa' alias.
+        """
+        from miku.core2_cognitive.app_catalog import predict_app
+        canonical_ww1, _ = predict_app("wuthering wave")
+        canonical_ww2, _ = predict_app("wuthering waves")
+        canonical_wuwa, _ = predict_app("wuwa")
+        canonical_wa, _ = predict_app("wa")
+        canonical_whatsapp, _ = predict_app("whatsapp")
+
+        self.assertEqual(canonical_ww1, "wuthering waves")
+        self.assertEqual(canonical_ww2, "wuthering waves")
+        self.assertEqual(canonical_wuwa, "wuthering waves")
+        self.assertEqual(canonical_wa, "whatsapp")
+        self.assertEqual(canonical_whatsapp, "whatsapp")
+
+    def test_category_understanding_clarification_and_realtime_learning(self):
+        """
+        Tests multi-turn clarification for category commands like 'open games':
+        1. 'open games' prompts user for clarification with installed games.
+        2. User selects 'wuthering wave' -> dispatches and saves preference in real time.
+        3. Subsequent 'open games' automatically dispatches the learned preferred game.
+        """
+        from miku.core2_cognitive.cognitive_daemon import CognitiveDaemon
+        from miku.ipc.messages import STTTranscriptMsg
+        import queue
+
+        action_q = queue.Queue()
+        response_q = queue.Queue()
+        daemon = CognitiveDaemon(action_queue=action_q, response_queue=response_q)
+
+        # Clear any prior memory for fresh test
+        daemon.learner.reset()
+
+        # Step 1: User says 'open games'
+        msg1 = STTTranscriptMsg(text="open games", confidence=1.0)
+        res1 = daemon.handle_transcript(msg1)
+
+        self.assertEqual(res1.get("status"), "clarification_needed")
+        self.assertIn("Which game would you like to open?", res1.get("message", ""))
+        self.assertIsNotNone(daemon.pending_clarification)
+        self.assertEqual(daemon.pending_clarification["category"], "games")
+
+        # Step 2: User responds with 'wuthering wave'
+        msg2 = STTTranscriptMsg(text="wuthering wave", confidence=1.0)
+        res2 = daemon.handle_transcript(msg2)
+
+        self.assertEqual(res2.get("status"), "dispatched")
+        self.assertEqual(res2.get("action_msg").target, "wuthering waves")
+        self.assertIn("Wuthering Waves", res2.get("message", ""))
+        self.assertIsNone(daemon.pending_clarification)
+
+        # Step 3: User says 'open games' again -> should immediately dispatch learned preference!
+        msg3 = STTTranscriptMsg(text="open games", confidence=1.0)
+        res3 = daemon.handle_transcript(msg3)
+
+        self.assertEqual(res3.get("status"), "dispatched")
+        self.assertEqual(res3.get("action_msg").target, "wuthering waves")
+        self.assertIn("preferred game", res3.get("message", "").lower())
+
+        # Cleanup
+        daemon.learner.reset()
+
+    def test_realtime_teaching_intent(self):
+        """
+        Tests explicit real-time teaching: 'when I say games open wuthering wave'
+        """
+        from miku.core2_cognitive.cognitive_daemon import CognitiveDaemon
+        from miku.ipc.messages import STTTranscriptMsg
+        import queue
+
+        action_q = queue.Queue()
+        response_q = queue.Queue()
+        daemon = CognitiveDaemon(action_queue=action_q, response_queue=response_q)
+        daemon.learner.reset()
+
+        teach_msg = STTTranscriptMsg(text="when I say games open wuthering wave", confidence=1.0)
+        teach_res = daemon.handle_transcript(teach_msg)
+
+        self.assertEqual(teach_res.get("status"), "conversational_response")
+        self.assertIn("Whenever you say 'games'", teach_res.get("message", ""))
+
+        # Now test triggering it
+        cmd_msg = STTTranscriptMsg(text="games", confidence=1.0)
+        cmd_res = daemon.handle_transcript(cmd_msg)
+        self.assertEqual(cmd_res.get("status"), "dispatched")
+        self.assertEqual(cmd_res.get("action_msg").target, "wuthering waves")
+
+        # Query what was learned
+        query_msg = STTTranscriptMsg(text="what have you learned", confidence=1.0)
+        query_res = daemon.handle_transcript(query_msg)
+        self.assertIn("Category Preferences", query_res.get("message", ""))
+
+        # Reset
+        daemon.learner.reset()
+
 if __name__ == "__main__":
     unittest.main()

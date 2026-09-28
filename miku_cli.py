@@ -75,16 +75,16 @@ def run_interactive():
 
             status = decision.get("status")
             if status == "dispatched":
+                if decision.get("message"):
+                    print(f"  [Miku]   {decision['message']}")
                 action = decision["action_msg"]
                 print(f"  [Intent] Approved: {action.action_type} (target='{action.target}') [Conf: {decision['confidence']:.2f}]")
                 res = orchestrator.execution_daemon.execute_request(action)
                 orchestrator.cognitive_daemon.handle_action_completion(res)
                 orchestrator.logger.log_action(res.task_id, action.action_type, action.target, res.status, res.message)
                 print(f"  [Hands]  {res.status}: {res.message}")
-            elif status == "conversational_response":
+            elif status in ("conversational_response", "clarification_needed"):
                 print(f"  [Miku]   {decision.get('message')}")
-            elif status == "clarification_needed":
-                print(f"  [Brain]  {decision.get('message')}")
             elif status == "calibration_required":
                 print(f"  [Alert]  {decision.get('message')}")
             else:
