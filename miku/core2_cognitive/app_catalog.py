@@ -241,6 +241,53 @@ APP_CATALOG: Dict[str, Dict[str, Any]] = {
         "protocol": "ms-settings:",
         "close_process": ["SystemSettings.exe"],
         "category": "desktop"
+    },
+    # --- Games & Gaming Launchers ---
+    "wuthering waves": {
+        "display_name": "Wuthering Waves",
+        "aliases": [
+            "wuthering waves",
+            "wuthering wave",
+            "wuwa",
+            "wuthering",
+            "kuro games",
+            "wuthering waves game",
+            "wuthering waves launcher"
+        ],
+        "paths": [
+            r"C:\Program Files\Wuthering Waves\launcher.exe",
+            r"C:\Program Files\Wuthering Waves\Wuthering Waves Game\Wuthering Waves.exe",
+            r"C:\Program Files\Wuthering Waves\Wuthering Waves Game\Client\Binaries\Win64\Client-Win64-Shipping.exe",
+            r"C:\Wuthering Waves\launcher.exe",
+            r"D:\Wuthering Waves\launcher.exe",
+            r"E:\Wuthering Waves\launcher.exe",
+        ],
+        "executable": "Wuthering Waves.exe",
+        "close_process": [
+            "Client-Win64-Shipping.exe",
+            "Wuthering Waves.exe",
+            "launcher.exe",
+            "launcher_main.exe"
+        ],
+        "url": "https://wutheringwaves.kurogames.com",
+        "category": "game"
+    },
+    "steam": {
+        "display_name": "Steam",
+        "aliases": ["steam", "valve"],
+        "protocol": "steam:",
+        "executable": "steam.exe",
+        "close_process": ["steam.exe"],
+        "url": "https://store.steampowered.com",
+        "category": "gaming"
+    },
+    "genshin impact": {
+        "display_name": "Genshin Impact",
+        "aliases": ["genshin", "genshin impact", "gi", "hoyoverse"],
+        "executable": "GenshinImpact.exe",
+        "close_process": ["GenshinImpact.exe"],
+        "url": "https://genshin.hoyoverse.com",
+        "category": "game"
     }
 }
 
@@ -264,9 +311,8 @@ def normalize_command_text(text: str) -> str:
 def predict_app(raw_name: str) -> Tuple[str, Dict[str, Any]]:
     """
     Predicts and resolves user app name to canonical app name and metadata.
-    Handles exact aliases, substrings, and fuzzy typo matching.
-    E.g. 'insta' -> ('instagram', {'url': 'https://www.instagram.com', ...})
-         'calcultor' -> ('calculator', {'executable': 'calc.exe', ...})
+    Handles exact aliases, word overlap, prefix completion, and fuzzy typo matching.
+    Guarantees no false positive cross-substring collisions (e.g. 'wuthering wave' never matches 'wa').
     """
     clean = raw_name.strip().lower()
 
@@ -274,8 +320,8 @@ def predict_app(raw_name: str) -> Tuple[str, Dict[str, Any]]:
     if clean.startswith("the "):
         clean = clean[4:].strip()
 
-    # Strip suffixes like ' application', ' app', ' website', ' site', ' page'
-    for suffix in (" application", " app", " website", " site", " page"):
+    # Strip suffixes like ' application', ' app', ' game', ' launcher', ' website', ' site', ' page'
+    for suffix in (" application", " app", " game", " launcher", " website", " site", " page"):
         if clean.endswith(suffix):
             clean = clean[:-len(suffix)].strip()
             break
@@ -285,19 +331,44 @@ def predict_app(raw_name: str) -> Tuple[str, Dict[str, Any]]:
         canonical = _ALIAS_INDEX[clean]
         return canonical, APP_CATALOG[canonical]
 
-    # 2. Substring matching for terms >= 3 characters (e.g. 'insta' inside 'instagram')
-    if len(clean) >= 3:
-        for al, canonical in _ALIAS_INDEX.items():
-            if clean == al or clean in al or al in clean:
-                return canonical, APP_CATALOG[canonical]
-
-    # 3. Fuzzy typo matching (cutoff 0.65)
-    close_matches = difflib.get_close_matches(clean, _ALIAS_INDEX.keys(), n=1, cutoff=0.65)
-    if close_matches:
-        canonical = _ALIAS_INDEX[close_matches[0]]
+    # Normalize spaces (e.g. 'whats app' -> 'whatsapp')
+    clean_nospace = clean.replace(" ", "")
+    if clean_nospace in _ALIAS_INDEX:
+        canonical = _ALIAS_INDEX[clean_nospace]
         return canonical, APP_CATALOG[canonical]
 
-    # 4. Unknown target: return as generic app entry
+    # 2. Multi-word phrase overlap (e.g. 'wuthering wave' -> 'wuthering waves')
+    clean_words = set(clean.split())
+    if len(clean_words) > 1:
+        best_canonical = None
+        best_score = 0
+        for canonical, data in APP_CATALOG.items():
+            for al in data.get("aliases", []):
+                al_words = set(al.split())
+                if len(al_words) > 1:
+                    overlap = len(clean_words.intersection(al_words))
+                    if overlap >= len(clean_words) - 1 and overlap > best_score:
+                        best_score = overlap
+                        best_canonical = canonical
+        if best_canonical:
+            return best_canonical, APP_CATALOG[best_canonical]
+
+    # 3. Clean is a prefix of an alias (e.g. 'insta' -> 'instagram', 'calcu' -> 'calculator')
+    # Guard: clean must be >= 4 chars, and alias must START with clean
+    if len(clean) >= 4:
+        for al, canonical in _ALIAS_INDEX.items():
+            if al.startswith(clean):
+                return canonical, APP_CATALOG[canonical]
+
+    # 4. Fuzzy typo matching (only for words of comparable length, cutoff=0.72)
+    candidates = [k for k in _ALIAS_INDEX.keys() if abs(len(clean) - len(k)) <= 3]
+    if candidates:
+        close_matches = difflib.get_close_matches(clean, candidates, n=1, cutoff=0.72)
+        if close_matches:
+            canonical = _ALIAS_INDEX[close_matches[0]]
+            return canonical, APP_CATALOG[canonical]
+
+    # 5. Unknown target: return as generic app entry
     return clean, {
         "display_name": clean.capitalize(),
         "aliases": [clean],

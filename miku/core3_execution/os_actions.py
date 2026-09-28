@@ -93,6 +93,20 @@ class OSActionsExecutor:
             except Exception:
                 pass  # Fall back to URL or executable
 
+        # 1b. Known installed application paths (e.g. Wuthering Waves, Steam games)
+        if "paths" in info:
+            for p in info["paths"]:
+                if os.path.exists(p):
+                    try:
+                        if sys.platform == "win32" and hasattr(os, "startfile"):
+                            os.startfile(p)
+                            return True, f"Launched {display_name}"
+                        else:
+                            subprocess.Popen([p], cwd=os.path.dirname(p))
+                            return True, f"Launched {display_name}"
+                    except Exception:
+                        pass
+
         # 2. Local executable (e.g. notepad.exe, calc.exe, code)
         if "executable" in info:
             exe = info["executable"]
