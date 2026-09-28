@@ -70,3 +70,10 @@ python miku_cli.py status
 ```bash
 python run_tests.py
 ```
+
+---
+
+## 4. Contributors
+
+- [@DEEPAN0988](https://github.com/DEEPAN0988) — Maintainer
+- [@AravindKumar07012007](https://github.com/AravindKumar07012007) — Contributor
