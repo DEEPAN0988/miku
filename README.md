@@ -75,5 +75,8 @@ python run_tests.py
 
 ## 4. Contributors
 
-- [@DEEPAN0988](https://github.com/DEEPAN0988) — Maintainer
-- [@AravindKumar07012007](https://github.com/AravindKumar07012007) — Contributor
+- **Deepan** ([@DEEPAN0988](https://github.com/DEEPAN0988))
+- **Aravind Kumar** ([@AravindKumar07012007](https://github.com/AravindKumar07012007))
+
+See [CONTRIBUTORS.md](CONTRIBUTORS.md) for details.
+
