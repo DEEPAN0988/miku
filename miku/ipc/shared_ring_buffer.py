@@ -33,11 +33,14 @@ class SharedRingBuffer:
                 existing = shared_memory.SharedMemory(name=self.name)
                 existing.close()
                 existing.unlink()
-            except FileNotFoundError:
+            except Exception:
                 pass
-            self.shm = shared_memory.SharedMemory(name=self.name, create=True, size=self.total_bytes)
-            # Initialize headers to 0
-            self.shm.buf[:self.total_bytes] = b"\x00" * self.total_bytes
+            try:
+                self.shm = shared_memory.SharedMemory(name=self.name, create=True, size=self.total_bytes)
+                # Initialize headers to 0
+                self.shm.buf[:self.total_bytes] = b"\x00" * self.total_bytes
+            except FileExistsError:
+                self.shm = shared_memory.SharedMemory(name=self.name, create=False)
         else:
             self.shm = shared_memory.SharedMemory(name=self.name, create=False)
 

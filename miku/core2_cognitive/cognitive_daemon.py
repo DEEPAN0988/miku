@@ -127,7 +127,7 @@ class CognitiveDaemon:
 
             action_msg = ActionRequestMsg(
                 action_type=action,
-                target=params.get("app") or params.get("target") or params.get("query") or "",
+                target=params.get("app") or params.get("target") or params.get("url") or params.get("path") or params.get("query") or "",
                 coords=self.latest_vision_detection.bbox[:2] if self.latest_vision_detection else None,
                 params=params,
                 task_id=task_id,

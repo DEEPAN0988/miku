@@ -139,5 +139,39 @@ for i in range(3):
             if dummy_file.exists():
                 dummy_file.unlink()
 
+    def test_os_actions_app_launch_and_close(self):
+        """
+        Tests OSActionsExecutor app mappings, alias handling, close_app, and open_file.
+        """
+        executor = OSActionsExecutor()
+
+        # Check APP_MAP mappings
+        self.assertEqual(executor.APP_MAP["calc"], "calc.exe")
+        self.assertEqual(executor.APP_MAP["calculator"], "calc.exe")
+        self.assertEqual(executor.APP_MAP["edge"], "microsoft-edge:")
+        self.assertEqual(executor.APP_MAP["browser"], "microsoft-edge:")
+        self.assertEqual(executor.APP_MAP["vscode"], "code")
+        self.assertEqual(executor.APP_MAP["paint"], "mspaint.exe")
+
+        # Check PROCESS_MAP mappings
+        self.assertIn("CalculatorApp.exe", executor.PROCESS_MAP["calculator"])
+        self.assertIn("calc.exe", executor.PROCESS_MAP["calc"])
+        self.assertIn("msedge.exe", executor.PROCESS_MAP["edge"])
+
+        # Test open_file with a temporary file
+        temp_file = Path("test_open_file.tmp")
+        temp_file.write_text("sample content")
+        try:
+            # Existing file
+            ok, msg = executor.open_file(str(temp_file))
+            self.assertTrue(ok)
+            # Non-existent file
+            ok_bad, msg_bad = executor.open_file("non_existent_file_xyz_123.tmp")
+            self.assertFalse(ok_bad)
+            self.assertIn("File not found", msg_bad)
+        finally:
+            if temp_file.exists():
+                temp_file.unlink()
+
 if __name__ == "__main__":
     unittest.main()

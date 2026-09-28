@@ -111,6 +111,38 @@ class TestCore2Cognitive(unittest.TestCase):
         self.assertEqual(miss_rate, 0.0, f"Golden-set miss rate must be 0%, got {miss_rate}")
         self.assertEqual(grammar.coverage_ratio, 1.0)
 
+    def test_expanded_app_and_browser_routing(self):
+        """
+        Verifies extended application alias matching, URL routing, and app closing.
+        """
+        grammar = DeterministicGrammarRouter()
+        queries = [
+            ("open calc", "OPEN_APP", "open_app", "calc"),
+            ("open calculator", "OPEN_APP", "open_app", "calculator"),
+            ("open edge", "OPEN_APP", "open_app", "edge"),
+            ("open browser", "OPEN_APP", "open_app", "browser"),
+            ("open chrome", "OPEN_APP", "open_app", "chrome"),
+            ("open vscode", "OPEN_APP", "open_app", "vscode"),
+            ("open code", "OPEN_APP", "open_app", "code"),
+            ("open paint", "OPEN_APP", "open_app", "paint"),
+            ("open terminal", "OPEN_APP", "open_app", "terminal"),
+            ("open settings", "OPEN_APP", "open_app", "settings"),
+            ("open the notepad app", "OPEN_APP", "open_app", "notepad"),
+            ("close calc", "CLOSE_APP", "close_app", "calc"),
+            ("close edge", "CLOSE_APP", "close_app", "edge"),
+            ("close the calculator app", "CLOSE_APP", "close_app", "calculator"),
+            ("open google.com", "BROWSER_NAVIGATE", "browser_navigate", "google.com"),
+            ("browse to https://github.com", "BROWSER_NAVIGATE", "browser_navigate", "https://github.com"),
+            ("open file readme.md", "OPEN_FILE", "open_file", "readme.md")
+        ]
+
+        for text, exp_intent, exp_act, exp_target in queries:
+            intent, act, params, score = grammar.parse(text)
+            self.assertEqual(intent, exp_intent, f"Failed intent for '{text}': got {intent}")
+            self.assertEqual(act, exp_act, f"Failed act for '{text}': got {act}")
+            target = params.get("app") or params.get("target") or params.get("url") or params.get("path")
+            self.assertEqual(target, exp_target, f"Failed target for '{text}': got {target}")
+
     def test_bm25_memory_exact_retrieval_and_graceful_not_found(self):
         """
         Verifies Okapi BM25 exact match recall and graceful 'not found' on unindexed queries.

@@ -83,8 +83,17 @@ class ExecutionDaemon:
 
         # 2. App Launch
         if request.action_type == "open_app":
-            app = request.params.get("app", request.target)
+            app = request.params.get("app") or request.target or ""
             ok, msg = self.os_exec.launch_app(app)
+            status = "completed" if ok else "failed"
+            res = ActionResultMsg(task_id=request.task_id, success=ok, status=status, message=msg)
+            self.result_queue.put(res)
+            return res
+
+        # 2b. Open File / Folder
+        if request.action_type == "open_file":
+            path = request.params.get("path") or request.target or ""
+            ok, msg = self.os_exec.open_file(path)
             status = "completed" if ok else "failed"
             res = ActionResultMsg(task_id=request.task_id, success=ok, status=status, message=msg)
             self.result_queue.put(res)
@@ -92,7 +101,7 @@ class ExecutionDaemon:
 
         # 3. Close App
         if request.action_type == "close_app":
-            app = request.params.get("target", request.target)
+            app = request.params.get("target") or request.target or ""
             ok, msg = self.os_exec.close_app(app)
             status = "completed" if ok else "failed"
             res = ActionResultMsg(task_id=request.task_id, success=ok, status=status, message=msg)

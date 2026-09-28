@@ -16,19 +16,27 @@ class DeterministicGrammarRouter:
     def _init_grammars(self):
         # Format: (pattern, intent_name, action_type, default_params)
         grammars = [
+            # Browser Session Automation (CDP) & URLs (Matched before general open app)
+            (r"^(?:open\s+url|navigate\s+to|browse\s+to|browse|navigate)\s+(?P<url>https?://\S+|\S+\.\S+)$", "BROWSER_NAVIGATE", "browser_navigate", {}),
+            (r"^(?:open)\s+(?P<url>(?:https?://\S+|www\.\S+|[a-zA-Z0-9_\-]+\.(?:com|org|net|io|edu|gov|co|app|ai|me|dev)(?:/\S*)?))$", "BROWSER_NAVIGATE", "browser_navigate", {}),
+            (r"^(?:extract\s+page\s+text|read\s+page|scrape\s+page)$", "BROWSER_EXTRACT", "browser_extract", {}),
+            (r"^(?:solve|bypass|crack)\s+(?:the\s+)?captcha$", "SOLVE_CAPTCHA", "solve_captcha", {}),
+            (r"^(?:enable\s+)?(?:stealth|anti[- ]bot)(?:\s+mode)?$", "ANTI_BOT", "bypass_bot_check", {}),
+
+            # File & Folder Operations
+            (r"^(?:open|show)\s+(?:file|folder)\s+(?P<path>.+)$", "OPEN_FILE", "open_file", {}),
+            (r"^(?:delete|remove)\s+(?:file|folder)\s+(?P<path>.+)$", "DELETE_FILE", "delete_file", {"needs_confirmation": True}),
+            (r"^(?:find|search)\s+(?:file|folder)\s+(?P<query>.+)$", "SEARCH_FILE", "search_file", {}),
+            (r"^(?:create|make)\s+(?:file|note)\s+(?P<filename>[a-zA-Z0-9_\-\.]+)(?:\s+with\s+(?P<content>.+))?$", "CREATE_FILE", "create_file", {}),
+
             # OS & Application Control
-            (r"^(?:open|launch|start)\s+(?P<app>notepad|calculator|cmd|chrome|powershell|paint|explorer)$", "OPEN_APP", "open_app", {}),
-            (r"^(?:close|exit|terminate)\s+(?P<target>window|notepad|calculator|cmd|chrome|app)$", "CLOSE_APP", "close_app", {}),
+            (r"^(?:open|launch|start)\s+(?:the\s+)?(?P<app>[a-zA-Z0-9_\-\. ]+?)(?:\s+application|\s+app)?$", "OPEN_APP", "open_app", {}),
+            (r"^(?:close|exit|terminate|kill)\s+(?:the\s+)?(?P<target>[a-zA-Z0-9_\-\. ]+?)(?:\s+application|\s+app)?$", "CLOSE_APP", "close_app", {}),
             (r"^(?:maximize|minimize|restore)\s+(?:window|app)$", "WINDOW_STATE", "window_state", {}),
             
             # System Volume & Media
             (r"^(?:volume|sound)\s+(?P<direction>up|down|mute|unmute)$", "SYSTEM_VOLUME", "volume", {}),
             
-            # File Operations (Explicitly confirmation-gated in PRD)
-            (r"^(?:delete|remove)\s+(?:file|folder)\s+(?P<path>.+)$", "DELETE_FILE", "delete_file", {"needs_confirmation": True}),
-            (r"^(?:find|search)\s+(?:file|folder)\s+(?P<query>.+)$", "SEARCH_FILE", "search_file", {}),
-            (r"^(?:create|make)\s+(?:file|note)\s+(?P<filename>[a-zA-Z0-9_\-\.]+)(?:\s+with\s+(?P<content>.+))?$", "CREATE_FILE", "create_file", {}),
-
             # Task & Day Planning (Logic / rule engine based)
             (r"^(?:plan\s+my\s+day|show\s+my\s+schedule|what\s+do\s+i\s+have\s+today)$", "PLAN_DAY", "plan_day", {}),
             (r"^(?:add\s+task|schedule)\s+(?P<task>.+?)(?:\s+at\s+(?P<time>.+))?$", "ADD_TASK", "add_task", {}),
@@ -40,13 +48,7 @@ class DeterministicGrammarRouter:
 
             # Status & Automation Control
             (r"^(?:status\s+report|system\s+status|health\s+check)$", "SYSTEM_STATUS", "status_report", {}),
-            (r"^(?:stop|abort|cancel|halt)(?:\s+automation)?$", "ABORT_AUTOMATION", "abort_automation", {}),
-
-            # Browser Session Automation (CDP) & Stealth
-            (r"^(?:navigate\s+to|browse\s+to|open\s+url)\s+(?P<url>https?://\S+|\S+\.\S+)$", "BROWSER_NAVIGATE", "browser_navigate", {}),
-            (r"^(?:extract\s+page\s+text|read\s+page|scrape\s+page)$", "BROWSER_EXTRACT", "browser_extract", {}),
-            (r"^(?:solve|bypass|crack)\s+(?:the\s+)?captcha$", "SOLVE_CAPTCHA", "solve_captcha", {}),
-            (r"^(?:enable\s+)?(?:stealth|anti[- ]bot)(?:\s+mode)?$", "ANTI_BOT", "bypass_bot_check", {})
+            (r"^(?:stop|abort|cancel|halt)(?:\s+automation)?$", "ABORT_AUTOMATION", "abort_automation", {})
         ]
 
         for pat, intent, action, extra in grammars:

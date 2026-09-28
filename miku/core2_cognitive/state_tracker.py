@@ -85,7 +85,7 @@ class OSStateTracker:
         active_title = state.get("active_title", "").lower()
         active_proc = state.get("active_process", "").lower()
 
-        if action_type in ("open_app", "launch"):
+        if action_type in ("open_app", "open_file", "launch"):
             return 0.5  # Neutral affinity
         if action_type in ("close_app", "window_state") and active_title:
             return 0.9  # High affinity to current window
