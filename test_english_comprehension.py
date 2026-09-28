@@ -35,7 +35,8 @@ def test_language_comprehension():
         status_icon = "[PASS]" if passed else "[FAIL]"
         test_results.append(passed)
 
-        print(f"\n[{test_num:02d}] [{category}] Input: \"{input_text}\" ({elapsed_ms:.1f}ms)")
+        test_label = str(test_num).zfill(2)
+        print(f"\n[{test_label}] [{category}] Input: \"{input_text}\" ({elapsed_ms:.1f}ms)")
         print(f"     Expected: {expected_desc}")
         response_sample = res.get("message") or f"Action: {res.get('best_action')} (target='{getattr(res.get('action_msg'), 'target', '')}')"
         if len(str(response_sample)) > 90:
@@ -88,9 +89,15 @@ def test_language_comprehension():
     )
 
     evaluate_test(
-        6, "Typo Correction", "clsoe the notepadd app",
-        lambda r: (r.get("status") == "dispatched" and getattr(r.get("action_msg"), "target", "") == "notepad", "Corrected 'clsoe notepadd' to 'close notepad'"),
+        6, "Typo Correction Step 1", "clsoe the notepadd app",
+        lambda r: (r.get("status") == "confirmation_required" and "close" in str(r.get("message")).lower(), "Corrected 'clsoe notepadd' to 'close notepad' and asked confirmation"),
         "Normalize 'clsoe the notepadd app' -> close notepad"
+    )
+    
+    evaluate_test(
+        6.5, "Typo Correction Step 2", "yes",
+        lambda r: (r.get("status") == "dispatched" and getattr(r.get("action_msg"), "target", "") == "notepad", "Typo corrected and dispatched after confirmation"),
+        "Confirm the typo-corrected 'close notepad' command"
     )
 
     evaluate_test(
@@ -170,8 +177,14 @@ def test_language_comprehension():
 
     evaluate_test(
         16, "Alias Teaching", "call diary notepad",
-        lambda r: (r.get("status") == "conversational_response" and "diary" in r.get("message", "").lower(), "Mapped custom word 'diary' -> 'notepad'"),
+        lambda r: (r.get("status") == "confirmation_required", "Asked to confirm alias"),
         "Teach Miku that 'diary' means notepad"
+    )
+
+    evaluate_test(
+        16.5, "Alias Confirm", "yes",
+        lambda r: (r.get("status") == "conversational_response" and "learned" in r.get("message", "").lower(), "Confirmed alias"),
+        "Confirm the 'diary' -> 'notepad' alias"
     )
 
     evaluate_test(
@@ -219,6 +232,78 @@ def test_language_comprehension():
         22, "Unknown App Safeguard", "open mysteryfakeapp",
         lambda r: (r.get("status") == "clarification_needed" and "couldn't find" in r.get("message", "").lower(), "Politely asked for alternatives instead of failing execution"),
         "Safely handle non-existent application with clarification prompt"
+    )
+
+    # =========================================================================
+    # SECTION 7: End-to-End Safety, Compounds, and Repetition
+    # =========================================================================
+    print("\n" + "-" * 75)
+    print(" [SECTION 7] END-TO-END SAFETY & PRONOUNS")
+    print("-" * 75)
+
+    # 1. End-to-end teaching
+    evaluate_test(
+        23, "Teaching Step 1", "when i say work i mean open edge",
+        lambda r: (r.get("status") == "confirmation_required", "Asked to confirm link"),
+        "Require confirmation to link 'work' to 'open edge'"
+    )
+    evaluate_test(
+        24, "Teaching Step 2", "yes",
+        lambda r: (r.get("status") == "conversational_response" and "learned" in r.get("message", "").lower(), "Confirmed link"),
+        "Confirm the link is saved"
+    )
+    evaluate_test(
+        25, "Teaching Verify", "work",
+        lambda r: (r.get("status") == "dispatched" and getattr(r.get("action_msg"), "target", "") == "edge", "Resolved 'work' to edge"),
+        "Execute 'work' as 'open edge' via taught alias"
+    )
+
+    # 2. Compound safety
+    evaluate_test(
+        26, "Compound Destructive", "open notepad and then delete it",
+        lambda r: (r.get("status") == "confirmation_required" and "delete notepad" in str(r.get("message")).lower(), "Halted and asked for confirmation"),
+        "Handle compound command by halting on destructive step and asking for confirmation"
+    )
+
+    # 3. Repeat destructive
+    evaluate_test(
+        27, "Context Setup", "close edge",
+        lambda r: (r.get("status") == "confirmation_required" and "close edge" in str(r.get("message")).lower(), "Asked for confirmation to close"),
+        "Establish 'close edge' in context"
+    )
+    evaluate_test(
+        27.5, "Context Confirm", "yes",
+        lambda r: (r.get("status") == "dispatched" and getattr(r.get("action_msg"), "target", "") == "edge", "Dispatched close edge"),
+        "Confirm 'close edge' to execute it and set last_command"
+    )
+    evaluate_test(
+        28, "Repeat Destructive", "do it again",
+        lambda r: (r.get("status") == "confirmation_required" and "close edge" in str(r.get("message")).lower(), "Asked for confirmation to repeat"),
+        "Require confirmation to repeat a destructive action"
+    )
+    evaluate_test(
+        29, "Repeat Benign", "open notepad",
+        lambda r: (r.get("status") == "dispatched" and getattr(r.get("action_msg"), "target", "") == "notepad", "Opened notepad"),
+        "Establish 'open notepad' in context"
+    )
+    evaluate_test(
+        30, "Repeat Non-Destructive", "do it again",
+        lambda r: (r.get("status") == "dispatched" and getattr(r.get("action_msg"), "target", "") == "notepad", "Opened notepad again"),
+        "Repeat non-destructive action without confirmation"
+    )
+
+
+
+    evaluate_test(
+        32, "Restore App (Open App)", "restore calculator",
+        lambda r: (r.get("status") == "dispatched" and getattr(r.get("action_msg"), "target", "") == "calculator", "Resolved 'restore calculator' to launch calculator"),
+        "Verify 'restore <appname>' opens an unlaunched app"
+    )
+
+    evaluate_test(
+        33, "Restore App (Window State)", "restore the window",
+        lambda r: (r.get("status") == "dispatched" and getattr(r.get("action_msg"), "action_type", "") == "window_state", "Resolved 'restore the window' to window_state action"),
+        "Verify 'restore the window' is parsed as a window state action"
     )
 
     # =========================================================================
