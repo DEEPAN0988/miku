@@ -42,9 +42,11 @@ class DeterministicGrammarRouter:
             (r"^(?:status\s+report|system\s+status|health\s+check)$", "SYSTEM_STATUS", "status_report", {}),
             (r"^(?:stop|abort|cancel|halt)(?:\s+automation)?$", "ABORT_AUTOMATION", "abort_automation", {}),
 
-            # Browser Session Automation (CDP)
+            # Browser Session Automation (CDP) & Stealth
             (r"^(?:navigate\s+to|browse\s+to|open\s+url)\s+(?P<url>https?://\S+|\S+\.\S+)$", "BROWSER_NAVIGATE", "browser_navigate", {}),
-            (r"^(?:extract\s+page\s+text|read\s+page|scrape\s+page)$", "BROWSER_EXTRACT", "browser_extract", {})
+            (r"^(?:extract\s+page\s+text|read\s+page|scrape\s+page)$", "BROWSER_EXTRACT", "browser_extract", {}),
+            (r"^(?:solve|bypass|crack)\s+(?:the\s+)?captcha$", "SOLVE_CAPTCHA", "solve_captcha", {}),
+            (r"^(?:enable\s+)?(?:stealth|anti[- ]bot)(?:\s+mode)?$", "ANTI_BOT", "bypass_bot_check", {})
         ]
 
         for pat, intent, action, extra in grammars:

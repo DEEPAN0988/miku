@@ -15,6 +15,7 @@ from miku.core4_vision.viola_jones import ViolaJonesDetector
 from miku.core4_vision.lucas_kanade import LucasKanadeMotionDetector
 from miku.core4_vision.kalman_tracker import KalmanObjectTracker
 from miku.core4_vision.hsv_segmentation import HSVSegmentation
+from miku.core4_vision.scene_understanding import CustomSceneUnderstanding
 
 class VisionDaemon:
     def __init__(
@@ -29,6 +30,7 @@ class VisionDaemon:
         self.optical_flow = LucasKanadeMotionDetector()
         self.kalman = KalmanObjectTracker()
         self.hsv = HSVSegmentation()
+        self.scene_engine = CustomSceneUnderstanding()
 
         self.slot_counter = 0
 
@@ -91,6 +93,17 @@ class VisionDaemon:
                 timestamp=now
             )
             detections.append(det)
+
+        # 5. Custom Deep Scene Understanding
+        scene_info = self.scene_engine.analyze_scene(rgb_frame)
+        det_scene = VisionDetectionMsg(
+            label=f"scene_{scene_info['scene_class']}",
+            bbox=(0, 0, rgb_frame.shape[1], rgb_frame.shape[0]),
+            confidence=scene_info["confidence"],
+            motion_vector=(0.0, 0.0),
+            timestamp=now
+        )
+        detections.append(det_scene)
 
         # Dispatch detections over IPC Queue (Zero raw frames sent across queue)
         for d in detections:

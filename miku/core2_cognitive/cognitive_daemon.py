@@ -35,6 +35,9 @@ class CognitiveDaemon:
         self.cdsh = CDSHRouter()
         self.calibration = CalibrationDaemon()
 
+        from miku.core2_cognitive.custom_chat_engine import CustomChatEngine
+        self.chat_engine = CustomChatEngine()
+
         self.latest_vision_detection: Optional[VisionDetectionMsg] = None
         self.latest_vision_time: float = 0.0
 
@@ -140,9 +143,10 @@ class CognitiveDaemon:
             decision_result["task_id"] = task_id
             decision_result["action_msg"] = action_msg
         else:
-            # Below threshold or unparseable: Fail predictably with clarification
-            decision_result["status"] = "clarification_needed"
-            decision_result["message"] = f"I am not confident what you meant by '{text}'. Could you rephrase?"
+            # Open-ended conversational query: Engage custom Causal Transformer
+            chat_reply = self.chat_engine.respond(text)
+            decision_result["status"] = "conversational_response"
+            decision_result["message"] = chat_reply
 
         return decision_result
 
