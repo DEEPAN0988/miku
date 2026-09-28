@@ -47,6 +47,24 @@ class CognitiveDaemon:
         from miku.core2_cognitive.english_lexicon import EnglishLexicon
         self.lexicon = EnglishLexicon()
 
+        from miku.core2_cognitive.normalizer import Normalizer
+        from miku.core2_cognitive.lexicon import CommandLexicon
+        from miku.core2_cognitive.intent_classifier import ClassicalIntentClassifier
+        from miku.core2_cognitive.slot_tagger import SlotTagger
+        from miku.core2_cognitive.discourse import DiscourseManager
+        from miku.core2_cognitive.safe_speller import SafeSpeller
+        from miku.core2_cognitive.dialogue_stack import DialogueStackManager
+        from miku.core2_cognitive.active_learning import ActiveLearningManager
+
+        self.normalizer = Normalizer()
+        self.cmd_lexicon = CommandLexicon()
+        self.intent_classifier = ClassicalIntentClassifier()
+        self.slot_tagger = SlotTagger()
+        self.discourse = DiscourseManager()
+        self.safe_speller = SafeSpeller()
+        self.dialogue_stack = DialogueStackManager()
+        self.active_learning = ActiveLearningManager()
+
         self.latest_vision_detection: Optional[VisionDetectionMsg] = None
         self.latest_vision_time: float = 0.0
 
@@ -66,10 +84,108 @@ class CognitiveDaemon:
         """
         now = time.time()
         text = transcript.text.strip()
+        clean_lower = text.lower()
+
+        # Step -1: Active Learning Failure Review and Promotion
+        if clean_lower in ("show what you didn't understand", "review failures", "show learning failures", "what did you fail to understand", "what could you not understand"):
+            return {
+                "query": text,
+                "status": "conversational_response",
+                "message": self.active_learning.format_review_summary(),
+                "confidence": 1.0
+            }
+        promote_match = re.match(r"^learn\s+[\"']?(.+?)[\"']?\s+as\s+([a-zA-Z0-9_\-]+)$", clean_lower)
+        if promote_match:
+            promoted_phrase = promote_match.group(1).strip()
+            promoted_intent = promote_match.group(2).strip().upper()
+            self.active_learning.promote_to_training(promoted_phrase, promoted_intent, self.intent_classifier)
+            return {
+                "query": text,
+                "status": "conversational_response",
+                "message": f"Learned! Promoted '{promoted_phrase}' as intent '{promoted_intent}' and updated my local model.",
+                "confidence": 1.0
+            }
+
+        # Step 0-RealtimeTeaching: Explicit real-time teaching (e.g. "when I say games open wuthering wave")
+        teach_res = self.learner.check_teaching_intent(text)
+        if teach_res:
+            trigger, target, confirm_msg = teach_res
+            self.cmd_lexicon.register_taught_word(trigger, target)
+            return {
+                "query": text,
+                "status": "conversational_response",
+                "message": confirm_msg,
+                "confidence": 1.0
+            }
+
+        # Step 0-UsableTeaching: Natural teaching ("when I say X I mean Y", "remember that X is Y", "call X Y", etc.)
+        usable_teach = self.cmd_lexicon.check_teaching_intent(text)
+        if usable_teach:
+            alias = usable_teach["alias"]
+            target = usable_teach["target"]
+            self.cmd_lexicon.register_taught_word(alias, target)
+            self.learner.set_custom_alias(alias, target)
+            return {
+                "query": text,
+                "status": "conversational_response",
+                "message": f"Learned! I've linked '{alias}' to '{target}'.",
+                "confidence": 1.0
+            }
+
+        # Step 0-Negation: Negation handling ("don't open notepad", "never mute sound", "not that one")
+        neg_res = self.discourse.analyze_negation(text)
+        if neg_res["has_negation"]:
+            if neg_res["is_correction"] and neg_res["target_command"]:
+                text = neg_res["target_command"]
+                clean_lower = text.lower()
+            else:
+                return {
+                    "query": text,
+                    "status": "negation_refusal",
+                    "message": "Understood. I will not execute that action.",
+                    "confidence": 1.0,
+                    "action_msg": None
+                }
+
+        # Step 0-Compound: Multi-step compound commands ("open notepad and then turn up volume")
+        sub_commands = self.discourse.split_compound(text)
+        if len(sub_commands) > 1:
+            compound_results = []
+            for sub_cmd in sub_commands:
+                sub_msg = STTTranscriptMsg(text=sub_cmd, confidence=transcript.confidence)
+                sub_res = self.handle_transcript(sub_msg)
+                compound_results.append(sub_res)
+            return {
+                "query": text,
+                "status": "dispatched",
+                "best_action": "compound",
+                "confidence": 1.0,
+                "sub_results": compound_results,
+                "message": f"Executing ordered compound sequence: {', '.join(sub_commands)}."
+            }
+
+        # Step 0-Coreference: Pronoun resolution ("close it", "maximize it", "the second one", "do that again")
+        coref_res = self.discourse.resolve_coreference(text, self.dialogue_stack.get_entity_context())
+        if coref_res.get("is_resolved") and coref_res.get("reconstructed"):
+            text = coref_res["reconstructed"]
+            clean_lower = text.lower()
 
         # Step 0-Norm: English Lexicon typo normalization (e.g. 'undrestand' -> 'understand', 'opne' -> 'open')
-        text = self.lexicon.normalize_sentence(text)
+        norm = self.normalizer.normalize(text)
+        speller_res = self.safe_speller.correct_sentence(norm["normalized"])
+        text = self.cmd_lexicon.rewrite_taught_terms(speller_res["corrected"])
         clean_lower = text.lower()
+
+        # Step 0-Destructive: Safeguard destructive actions (delete, wipe, format, rm, kill process)
+        destructive_pat = r"\b(?:delete|remove|format|wipe|destroy|erase|kill\s+process|rm\s+-rf|drop\s+table|transfer\s+\d+|send\s+an?\s+email)\b"
+        if re.search(destructive_pat, clean_lower) and not re.search(r"\b(?:close|quit|exit|shut\s+down)\s+(?:notepad|calculator|edge|chrome|wuthering|app|window)\b", clean_lower):
+            return {
+                "query": text,
+                "status": "confirmation_required",
+                "best_action": "ask_confirmation",
+                "confidence": 1.0,
+                "message": f"This command involves a potentially destructive action ('{text}'). Explicit user confirmation is required to proceed. Do you wish to confirm?"
+            }
 
         # Step 0-Train: Training Intent ("train miku to understand english words", "train english", "train words")
         if re.search(r"\b(?:train\s+miku|train\s+english|train\s+words?|train\s+vocabulary|train\s+language)\b", clean_lower):
@@ -202,6 +318,7 @@ class CognitiveDaemon:
             }
         if clean_lower in ("reset learning", "clear learned memory", "forget preferences", "clear memory"):
             self.learner.reset()
+            self.cmd_lexicon.reset()
             return {
                 "query": text,
                 "status": "conversational_response",
@@ -303,8 +420,55 @@ class CognitiveDaemon:
             if al in clean_lower:
                 parsed_text = re.sub(rf"\b{re.escape(al)}\b", target, parsed_text, flags=re.I)
 
-        # 1. Grammar parse
+        # 1. Grammar parse (First pass)
         intent, action, params, s_lang = self.grammar.parse(parsed_text)
+
+        # 1B. Classical Intent Classifier (Second pass for what grammar misses)
+        if not action:
+            clf_res = self.intent_classifier.predict(clean_lower)
+            if clf_res["is_confident"]:
+                c_intent = clf_res["top_intent"]
+                c_conf = clf_res["confidence"]
+                slots = self.slot_tagger.extract_slots(clean_lower, c_intent)
+
+                action_map = {
+                    "OPEN_APP": "open_app",
+                    "CLOSE_APP": "close_app",
+                    "SYSTEM_VOLUME": "volume",
+                    "BROWSER_NAVIGATE": "browser_navigate",
+                    "BROWSER_EXTRACT": "browser_extract",
+                    "OPEN_FILE": "open_file",
+                    "SEARCH_FILE": "search_file",
+                    "CREATE_FILE": "create_file",
+                    "PLAN_DAY": "plan_day",
+                    "ADD_TASK": "add_task",
+                    "SCREENSHOT": "screenshot",
+                    "CLICK_TARGET": "click_target",
+                    "INSPECT_CAMERA": "inspect_camera",
+                    "SYSTEM_STATUS": "status_report",
+                    "ABORT_AUTOMATION": "abort_automation",
+                    "WINDOW_STATE": "window_state"
+                }
+                mapped_action = action_map.get(c_intent)
+                if mapped_action:
+                    intent = c_intent
+                    action = mapped_action
+                    params = slots
+                    s_lang = c_conf
+
+                    # App prediction / normalization if app or target slot
+                    if "app" in params:
+                        from miku.core2_cognitive.app_catalog import predict_app
+                        c_app, c_info = predict_app(params["app"])
+                        params["app"] = c_app
+                        params["app_info"] = c_info
+                    if "target" in params and action == "close_app":
+                        from miku.core2_cognitive.app_catalog import predict_app
+                        c_tgt, c_info = predict_app(params["target"])
+                        params["target"] = c_tgt
+                        params["app_info"] = c_info
+            else:
+                self.active_learning.log_failure(parsed_text, "low_confidence_intent", clf_res["confidence"], clf_res["top_intent"])
 
         # 2. OS State snapshot
         os_state = self.state_tracker.capture_active_state()
@@ -422,6 +586,17 @@ class CognitiveDaemon:
 
             if is_compound:
                 self.cdsh.start_task_lock(task_id, current_delta_t=dt_state)
+
+            # Record recent entity in dialogue stack for pronoun resolution
+            if action in ("open_app", "close_app"):
+                app_target = params.get("app") or params.get("target")
+                if app_target:
+                    self.dialogue_stack.record_entity("last_app", app_target)
+            if action in ("open_file", "search_file", "create_file", "delete_file"):
+                path_target = params.get("path") or params.get("filename")
+                if path_target:
+                    self.dialogue_stack.record_entity("last_file", path_target)
+            self.dialogue_stack.record_entity("last_command", text)
 
             self.action_queue.put(action_msg)
             decision_result["status"] = "dispatched"

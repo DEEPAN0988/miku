@@ -1,6 +1,6 @@
 """
 MIKU: Sovereign Local Agent — Command-Line Interface.
-Zero-Model, Zero-API Autonomous Local Assistant (v1.2.0).
+Zero-Model, Zero-API Autonomous Local Assistant (v1.0).
 """
 import sys
 import argparse
@@ -16,12 +16,12 @@ from miku.persistence.encrypted_log import EncryptedPersistenceLogger
 def print_banner():
     banner = r"""
 ========================================================================
-     __  __ _____ _  ___   _   ____   _____     _______ ____  _____ ___ _   _ 
-    |  \/  |_   _| |/ / | | | / ___| / _ \ \   / / ____|  _ \| ____|_ _| \ | |
-    | |\/| | | | | ' /| | | | \___ \| | | \ \ / /|  _| | |_) |  _|  | ||  \| |
-    | |  | | | | | . \| |_| |  ___) | |_| |\ V / | |___|  _ <| |___ | || |\  |
-    |_|  |_| |_| |_|\_\___/  |____/ \___/  \_/  |_____|_| \_\_____|___|_| \_|
-                 SOVEREIGN LOCAL AGENT — v1.2.0 (Zero-Model, Zero-API)
+              __  __  ___  _  __  _   _            _ 
+             |  \/  ||_ _|| |/ / | | | |  __   __ / |
+             | |\/| | | | | ' /  | | | |  \ \ / / | |
+             | |  | | | | | . \  | |_| |   \ V /  | |
+             |_|  |_||___||_|\_\  \___/     \_/   |_|
+                 SOVEREIGN LOCAL AGENT - v1.0 (Zero-Model, Zero-API)
 ========================================================================
     """
     print(banner)
