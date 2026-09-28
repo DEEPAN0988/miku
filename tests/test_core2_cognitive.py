@@ -113,34 +113,45 @@ class TestCore2Cognitive(unittest.TestCase):
 
     def test_expanded_app_and_browser_routing(self):
         """
-        Verifies extended application alias matching, URL routing, and app closing.
+        Verifies extended application alias matching, predictive canonical resolution, and conversational parsing.
         """
         grammar = DeterministicGrammarRouter()
         queries = [
-            ("open calc", "OPEN_APP", "open_app", "calc"),
+            ("open calc", "OPEN_APP", "open_app", "calculator"),
             ("open calculator", "OPEN_APP", "open_app", "calculator"),
+            ("open insta", "OPEN_APP", "open_app", "instagram"),
+            ("hey miku please open insta", "OPEN_APP", "open_app", "instagram"),
+            ("can you open instagram please", "OPEN_APP", "open_app", "instagram"),
+            ("open up insta", "OPEN_APP", "open_app", "instagram"),
+            ("open fb", "OPEN_APP", "open_app", "facebook"),
+            ("launch yt", "OPEN_APP", "open_app", "youtube"),
+            ("open wp", "OPEN_APP", "open_app", "whatsapp"),
             ("open edge", "OPEN_APP", "open_app", "edge"),
-            ("open browser", "OPEN_APP", "open_app", "browser"),
+            ("open browser", "OPEN_APP", "open_app", "edge"),
             ("open chrome", "OPEN_APP", "open_app", "chrome"),
             ("open vscode", "OPEN_APP", "open_app", "vscode"),
-            ("open code", "OPEN_APP", "open_app", "code"),
+            ("open code", "OPEN_APP", "open_app", "vscode"),
             ("open paint", "OPEN_APP", "open_app", "paint"),
             ("open terminal", "OPEN_APP", "open_app", "terminal"),
             ("open settings", "OPEN_APP", "open_app", "settings"),
             ("open the notepad app", "OPEN_APP", "open_app", "notepad"),
-            ("close calc", "CLOSE_APP", "close_app", "calc"),
+            ("open calcultor", "OPEN_APP", "open_app", "calculator"),
+            ("open instgram", "OPEN_APP", "open_app", "instagram"),
+            ("close calc", "CLOSE_APP", "close_app", "calculator"),
             ("close edge", "CLOSE_APP", "close_app", "edge"),
             ("close the calculator app", "CLOSE_APP", "close_app", "calculator"),
             ("open google.com", "BROWSER_NAVIGATE", "browser_navigate", "google.com"),
             ("browse to https://github.com", "BROWSER_NAVIGATE", "browser_navigate", "https://github.com"),
-            ("open file readme.md", "OPEN_FILE", "open_file", "readme.md")
+            ("open file readme.md", "OPEN_FILE", "open_file", "readme.md"),
+            ("turn up the volume", "SYSTEM_VOLUME", "volume", "up"),
+            ("mute audio", "SYSTEM_VOLUME", "volume", "mute")
         ]
 
         for text, exp_intent, exp_act, exp_target in queries:
             intent, act, params, score = grammar.parse(text)
             self.assertEqual(intent, exp_intent, f"Failed intent for '{text}': got {intent}")
             self.assertEqual(act, exp_act, f"Failed act for '{text}': got {act}")
-            target = params.get("app") or params.get("target") or params.get("url") or params.get("path")
+            target = params.get("app") or params.get("target") or params.get("url") or params.get("path") or params.get("direction")
             self.assertEqual(target, exp_target, f"Failed target for '{text}': got {target}")
 
     def test_bm25_memory_exact_retrieval_and_graceful_not_found(self):

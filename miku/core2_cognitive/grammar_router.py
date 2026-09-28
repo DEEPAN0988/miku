@@ -6,6 +6,8 @@ Provides bounded, predictable intent routing with exact entity extraction.
 import re
 from typing import Dict, Any, Optional, Tuple, List
 
+from miku.core2_cognitive.app_catalog import predict_app, normalize_command_text, _ALIAS_INDEX
+
 class DeterministicGrammarRouter:
     def __init__(self):
         self.rules: List[Dict[str, Any]] = []
@@ -29,13 +31,17 @@ class DeterministicGrammarRouter:
             (r"^(?:find|search)\s+(?:file|folder)\s+(?P<query>.+)$", "SEARCH_FILE", "search_file", {}),
             (r"^(?:create|make)\s+(?:file|note)\s+(?P<filename>[a-zA-Z0-9_\-\.]+)(?:\s+with\s+(?P<content>.+))?$", "CREATE_FILE", "create_file", {}),
 
-            # OS & Application Control
-            (r"^(?:open|launch|start)\s+(?:the\s+)?(?P<app>[a-zA-Z0-9_\-\. ]+?)(?:\s+application|\s+app)?$", "OPEN_APP", "open_app", {}),
-            (r"^(?:close|exit|terminate|kill)\s+(?:the\s+)?(?P<target>[a-zA-Z0-9_\-\. ]+?)(?:\s+application|\s+app)?$", "CLOSE_APP", "close_app", {}),
+            # OS & Application Control (Natural phrasing: open, launch, go to, visit, fire up, bring up)
+            (r"^(?:open(?:\s+up)?|launch|start|fire\s+up|go\s+to|visit|take\s+me\s+to|bring\s+up|switch\s+to)\s+(?:the\s+)?(?P<app>[a-zA-Z0-9_\-\. ]+?)(?:\s+application|\s+app|\s+website|\s+site|\s+page)?$", "OPEN_APP", "open_app", {}),
+            (r"^(?:close(?:\s+down)?|shut(?:\s+down)?|exit(?:\s+from)?|terminate|kill|quit)\s+(?:the\s+)?(?P<target>[a-zA-Z0-9_\-\. ]+?)(?:\s+application|\s+app)?$", "CLOSE_APP", "close_app", {}),
             (r"^(?:maximize|minimize|restore)\s+(?:window|app)$", "WINDOW_STATE", "window_state", {}),
             
-            # System Volume & Media
+            # System Volume & Media (Natural phrasing: volume up, turn up volume, increase sound, mute, unmute)
             (r"^(?:volume|sound)\s+(?P<direction>up|down|mute|unmute)$", "SYSTEM_VOLUME", "volume", {}),
+            (r"^(?:turn\s+up|crank\s+up|increase|raise|boost)\s+(?:the\s+)?(?:volume|sound|audio)$", "SYSTEM_VOLUME", "volume", {"direction": "up"}),
+            (r"^(?:turn\s+down|decrease|lower|reduce)\s+(?:the\s+)?(?:volume|sound|audio)$", "SYSTEM_VOLUME", "volume", {"direction": "down"}),
+            (r"^(?:mute|silence)\s+(?:the\s+)?(?:volume|sound|audio)?$", "SYSTEM_VOLUME", "volume", {"direction": "mute"}),
+            (r"^(?:unmute)\s+(?:the\s+)?(?:volume|sound|audio)?$", "SYSTEM_VOLUME", "volume", {"direction": "unmute"}),
             
             # Task & Day Planning (Logic / rule engine based)
             (r"^(?:plan\s+my\s+day|show\s+my\s+schedule|what\s+do\s+i\s+have\s+today)$", "PLAN_DAY", "plan_day", {}),
@@ -43,7 +49,8 @@ class DeterministicGrammarRouter:
 
             # Screen & Visual Perceptions
             (r"^(?:click|press)\s+(?:the\s+)?(?P<color>red|green|blue|yellow)?\s*(?P<target>icon|button|window|box)$", "CLICK_TARGET", "click_target", {}),
-            (r"^(?:take|capture)\s+(?:a\s+)?(?:screenshot|screen)$", "SCREENSHOT", "screenshot", {}),
+            (r"^(?:take|capture|snap)\s+(?:a\s+)?(?:screenshot|screen|snapshot)$", "SCREENSHOT", "screenshot", {}),
+            (r"^screenshot$", "SCREENSHOT", "screenshot", {}),
             (r"^(?:look\s+at|check)\s+(?:the\s+)?(?:camera|webcam|room)$", "INSPECT_CAMERA", "inspect_camera", {}),
 
             # Status & Automation Control
@@ -61,11 +68,11 @@ class DeterministicGrammarRouter:
 
     def parse(self, text: str) -> Tuple[Optional[str], Optional[str], Dict[str, Any], float]:
         """
-        Parses text deterministically.
+        Parses text deterministically with conversational normalization and predictive entity resolution.
         Returns (intent, action_type, params, linguistic_score)
         If unknown, returns (None, None, {}, 0.0) -> fails predictably.
         """
-        clean_text = text.strip().lower()
+        clean_text = normalize_command_text(text.strip().lower())
         self.total_queries += 1
 
         for rule in self.rules:
@@ -74,7 +81,31 @@ class DeterministicGrammarRouter:
                 self.matched_queries += 1
                 params = rule["extra"].copy()
                 params.update({k: v for k, v in match.groupdict().items() if v is not None})
+
+                # Predictive entity resolution for applications
+                if "app" in params:
+                    raw_app = params["app"]
+                    canonical, info = predict_app(raw_app)
+                    params["original_app"] = raw_app
+                    params["app"] = canonical
+                    params["app_info"] = info
+
+                if "target" in params and rule["action"] == "close_app":
+                    raw_target = params["target"]
+                    if raw_target not in ("window", "active window", "current window", "app"):
+                        canonical, info = predict_app(raw_target)
+                        params["original_target"] = raw_target
+                        params["target"] = canonical
+                        params["app_info"] = info
+
                 return rule["intent"], rule["action"], params, 1.0
+
+        # Standalone app name prediction (e.g. user just typed 'insta' or 'instagram' or 'calculator')
+        if clean_text in _ALIAS_INDEX:
+            canonical = _ALIAS_INDEX[clean_text]
+            info = predict_app(clean_text)[1]
+            self.matched_queries += 1
+            return "OPEN_APP", "open_app", {"app": canonical, "original_app": clean_text, "app_info": info}, 1.0
 
         return None, None, {}, 0.0
 

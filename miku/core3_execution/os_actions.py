@@ -79,57 +79,90 @@ class OSActionsExecutor:
         self.pending_confirmations: Dict[str, Dict[str, Any]] = {}
 
     def launch_app(self, app_name: str) -> Tuple[bool, str]:
-        clean_name = app_name.strip().lower()
-        if clean_name.startswith("the "):
-            clean_name = clean_name[4:].strip()
-        if clean_name.endswith(" application"):
-            clean_name = clean_name[:-12].strip()
-        elif clean_name.endswith(" app"):
-            clean_name = clean_name[:-4].strip()
+        from miku.core2_cognitive.app_catalog import predict_app
+        canonical, info = predict_app(app_name)
+        display_name = info.get("display_name", canonical.capitalize())
 
-        target = self.APP_MAP.get(clean_name, clean_name)
+        # 1. Native protocol scheme (e.g. instagram:, whatsapp:, spotify:, calc:, ms-settings:)
+        if "protocol" in info:
+            proto = info["protocol"]
+            try:
+                if sys.platform == "win32" and hasattr(os, "startfile"):
+                    os.startfile(proto)
+                    return True, f"Launched {display_name}"
+            except Exception:
+                pass  # Fall back to URL or executable
 
-        # 1. URI scheme (e.g. microsoft-edge:, ms-settings:)
+        # 2. Local executable (e.g. notepad.exe, calc.exe, code)
+        if "executable" in info:
+            exe = info["executable"]
+            if sys.platform == "win32" and hasattr(os, "startfile"):
+                try:
+                    os.startfile(exe)
+                    return True, f"Launched {display_name}"
+                except Exception:
+                    pass
+            bin_path = shutil.which(exe) or shutil.which(f"{exe}.exe")
+            if bin_path:
+                try:
+                    subprocess.Popen([bin_path], shell=False)
+                    return True, f"Launched {display_name}"
+                except Exception:
+                    pass
+
+        # 3. Web Service URL (e.g. https://www.instagram.com, https://www.youtube.com)
+        if "url" in info:
+            url = info["url"]
+            try:
+                import webbrowser
+                webbrowser.open(url)
+                return True, f"Opened {display_name} ({url})"
+            except Exception:
+                if sys.platform == "win32" and hasattr(os, "startfile"):
+                    os.startfile(url)
+                    return True, f"Opened {display_name} ({url})"
+
+        # 4. Fallback to legacy APP_MAP or general executable discovery
+        target = self.APP_MAP.get(canonical, self.APP_MAP.get(app_name.lower().strip(), canonical))
+
         if ":" in target and not target.endswith(".exe"):
             try:
                 if sys.platform == "win32" and hasattr(os, "startfile"):
                     os.startfile(target)
                 else:
                     subprocess.Popen(f'start "" "{target}"', shell=True)
-                return True, f"Launched {app_name}"
+                return True, f"Launched {display_name}"
             except Exception as e:
-                return False, f"Failed to launch {app_name}: {str(e)}"
+                return False, f"Failed to launch {display_name}: {str(e)}"
 
-        # 2. Try os.startfile on Windows
         if sys.platform == "win32" and hasattr(os, "startfile"):
             try:
                 os.startfile(target)
-                return True, f"Launched {app_name}"
+                return True, f"Launched {display_name}"
             except Exception:
                 if not target.endswith(".exe"):
                     try:
                         os.startfile(f"{target}.exe")
-                        return True, f"Launched {app_name}"
+                        return True, f"Launched {display_name}"
                     except Exception:
                         pass
 
-        # 3. Fallback to shutil.which or subprocess
         try:
             bin_path = shutil.which(target) or shutil.which(f"{target}.exe")
             if bin_path:
                 subprocess.Popen([bin_path], shell=False)
-                return True, f"Launched {app_name}"
+                return True, f"Launched {display_name}"
 
             if sys.platform == "win32":
                 proc = subprocess.run(f'start "" "{target}"', shell=True, capture_output=True)
                 if proc.returncode == 0:
-                    return True, f"Launched {app_name}"
-                return False, f"Failed to launch {app_name}: executable '{target}' not found."
+                    return True, f"Launched {display_name}"
+                return False, f"Failed to launch {display_name}: application '{target}' not found."
             else:
                 subprocess.Popen(target, shell=True)
-                return True, f"Launched {app_name}"
+                return True, f"Launched {display_name}"
         except Exception as e:
-            return False, f"Failed to launch {app_name}: {str(e)}"
+            return False, f"Failed to launch {display_name}: {str(e)}"
 
     def close_app(self, app_name: str) -> Tuple[bool, str]:
         clean_name = app_name.strip().lower()
@@ -154,15 +187,19 @@ class OSActionsExecutor:
             except Exception as e:
                 return False, f"Failed to close window: {str(e)}"
 
-        targets = self.PROCESS_MAP.get(clean_name, [f"{clean_name}.exe", f"{clean_name}*"])
+        from miku.core2_cognitive.app_catalog import predict_app
+        canonical, info = predict_app(clean_name)
+        display_name = info.get("display_name", canonical.capitalize())
+
+        targets = info.get("close_process") or self.PROCESS_MAP.get(canonical) or self.PROCESS_MAP.get(clean_name) or [f"{canonical}.exe", f"{clean_name}.exe", f"{clean_name}*"]
         try:
             if sys.platform == "win32":
                 for tgt in targets:
                     subprocess.run(f"taskkill /IM {tgt} /F", shell=True, capture_output=True)
-                return True, f"Closed {app_name}"
-            return True, f"Simulated close of {app_name}"
+                return True, f"Closed {display_name}"
+            return True, f"Simulated close of {display_name}"
         except Exception as e:
-            return False, f"Failed to close {app_name}: {str(e)}"
+            return False, f"Failed to close {display_name}: {str(e)}"
 
     def open_file(self, path: str) -> Tuple[bool, str]:
         try:
