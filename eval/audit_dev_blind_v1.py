@@ -85,40 +85,38 @@ def audit_dev_blind_v1():
                         "category": category
                     })
 
-        # Intent match check
+        # Intent match check — ORIGINAL SCORER RULES (evaluate_nlp.py @ 64c0b8b)
+        # Do NOT loosen any rule here without an approved diff and both scores shown.
         intent_match = False
+        msg_lower = str(res.get("message", "")).lower()
+
         if expected_intent in ("OUT_OF_SCOPE", "UNKNOWN"):
             intent_match = (status in ("conversational_response", "clarification_needed") and not is_false_action)
         elif expected_intent == "NEGATION_REFUSAL":
-            intent_match = (status == "negation_refusal" or (status in ("conversational_response", "clarification_needed") and not is_false_action))
+            intent_match = (status == "negation_refusal" or
+                            (status in ("conversational_response", "clarification_needed") and not is_false_action))
         elif expected_intent == "CONFIRMATION_REQUIRED":
             intent_match = (status == "confirmation_required")
         elif expected_intent == "CLARIFICATION_NEEDED":
             intent_match = (status == "clarification_needed")
         elif expected_intent == "COMPOUND_COMMAND":
-            intent_match = (status == "dispatched" and (actual_action == "compound" or "compound" in str(res.get("message", "")).lower()))
+            intent_match = (status == "dispatched" and
+                            (actual_action == "compound" or "compound" in str(res.get("message", "")).lower()))
         elif expected_intent == "PRONOUN_COMMAND":
-            # Pronoun + destructive (close/kill) correctly triggers confirmation_required; both dispatched and confirmation_required are valid.
-            intent_match = (status == "dispatched" or status == "confirmation_required")
+            # Original: dispatched is a pass. If is_destructive=True in dataset, confirmation_required also passes.
+            intent_match = (status == "dispatched" or
+                            (is_destructive and status == "confirmation_required"))
         elif expected_intent == "TEACH_WORD_ALIAS":
-            # Teaching is a two-step flow: Step 1 = confirmation_required ("Link X to Y? yes/no"),
-            # Step 2 = conversational_response ("Learned!"). Both are correct outcomes.
-            # Also accept clarification_needed when the alias is blocked (protected verb) — that is also correct.
-            msg_lower = str(res.get("message", "")).lower()
-            intent_match = (
-                status == "confirmation_required"  # Step 1: pending teaching confirmation
-                or (status == "conversational_response" and ("learned" in msg_lower or "got it" in msg_lower or "linked" in msg_lower))
-                or (status == "clarification_needed" and "cannot learn" in msg_lower)  # Protected vocab rejection is correct
-            )
+            # Original: only conversational_response with "learned"/"got it" counts.
+            # confirmation_required (Step 1) does NOT count — the full 2-step flow must complete.
+            intent_match = (status == "conversational_response" and
+                            ("learned" in msg_lower or "got it" in msg_lower))
         elif expected_intent == "DEFINE_WORD_QUERY":
-            msg_lower = str(res.get("message", "")).lower()
-            intent_match = (status == "conversational_response" and ("mean" in msg_lower or ":" in msg_lower or "definition" in msg_lower))
-        elif expected_intent == "SYSTEM_STATUS":
-            intent_match = (status in ("conversational_response", "dispatched") and actual_action != "search_file")
-        elif expected_intent == "DELETE_FILE":
-            # Deleting a file MUST require confirmation — confirmation_required IS the correct response.
-            intent_match = (status == "confirmation_required" or (status == "dispatched" and actual_action == "delete_file"))
+            intent_match = (status == "conversational_response" and
+                            ("mean" in msg_lower or ":" in msg_lower))
         else:
+            # Covers: OPEN_APP, CLOSE_APP, SYSTEM_STATUS, DELETE_FILE, OPEN_FILE, VOLUME, etc.
+            # All must dispatch with the exact expected action.
             intent_match = (status == "dispatched" and actual_action == expected_action)
 
         if not intent_match:

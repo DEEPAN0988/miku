@@ -131,9 +131,26 @@ def run_train():
 
     print("\n[+] SUCCESS: Miku is fully trained to understand English words, commands, and conversations!")
 
+def run_review():
+    print("[*] Starting Miss-Review Loop...")
+    from miku.core2_cognitive.miss_reviewer import MissReviewer
+    mr = MissReviewer()
+    mr.run_review_loop()
+
+def run_forget(ex_id):
+    from miku.core2_cognitive.miss_reviewer import MissReviewer
+    mr = MissReviewer()
+    mr.forget_example(ex_id)
+
+def run_summary():
+    from miku.core2_cognitive.miss_reviewer import MissReviewer
+    mr = MissReviewer()
+    mr.weekly_summary()
+
 def main():
     parser = argparse.ArgumentParser(description="Miku Sovereign Local Agent CLI")
-    parser.add_argument("mode", nargs="?", default="interactive", choices=["interactive", "calibrate", "status", "train"])
+    parser.add_argument("mode", nargs="?", default="interactive", choices=["interactive", "calibrate", "status", "train", "review-misses", "forget-example", "weekly-summary"])
+    parser.add_argument("ex_id", nargs="?", default=None, help="Example ID to forget")
     args = parser.parse_args()
 
     if args.mode == "calibrate":
@@ -142,6 +159,15 @@ def main():
         run_status()
     elif args.mode == "train":
         run_train()
+    elif args.mode == "review-misses":
+        run_review()
+    elif args.mode == "forget-example":
+        if not args.ex_id:
+            print("Error: forget-example requires an example ID.")
+        else:
+            run_forget(args.ex_id)
+    elif args.mode == "weekly-summary":
+        run_summary()
     else:
         run_interactive()
 

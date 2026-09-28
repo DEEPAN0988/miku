@@ -1,31 +1,22 @@
 {
   "total_items": 215,
   "refusal_or_ask_items": 64,
-  "false_actions_count": 1,
-  "false_action_rate_refusal_denom": 1.56,
-  "false_action_rate_total_denom": 0.47,
-  "total_failed_items": 14,
-  "accuracy": 93.49,
+  "false_actions_count": 0,
+  "false_action_rate_refusal_denom": 0.0,
+  "false_action_rate_total_denom": 0.0,
+  "total_failed_items": 44,
+  "accuracy": 79.53,
   "ranked_categories": [
     [
       "paraphrase",
-      13
+      24
     ],
     [
       "teaching",
-      1
+      20
     ]
   ],
-  "false_actions": [
-    {
-      "id": "blind_209",
-      "utterance": "open games",
-      "what_she_did": "dispatched open_app (target=wuthering waves)",
-      "what_she_should_have_done": "Refuse or ask clarification (CLARIFICATION_NEEDED)",
-      "severity": "wrong app",
-      "category": "out_of_scope"
-    }
-  ],
+  "false_actions": [],
   "failed_items": [
     {
       "id": "blind_003",
@@ -38,6 +29,76 @@
       "message": "I couldn't find an application named 'can we switch over to calculator' on your "
     },
     {
+      "id": "blind_010",
+      "utterance": "kill off notepad immediately",
+      "expected_intent": "CLOSE_APP",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "paraphrase",
+      "message": "This command involves a potentially destructive action ('kill off notepad immedi"
+    },
+    {
+      "id": "blind_011",
+      "utterance": "terminate edge right away",
+      "expected_intent": "CLOSE_APP",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "paraphrase",
+      "message": "This command involves a potentially destructive action ('terminate edge'). Expli"
+    },
+    {
+      "id": "blind_012",
+      "utterance": "shut down calculator window",
+      "expected_intent": "CLOSE_APP",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "paraphrase",
+      "message": "This command involves a potentially destructive action ('shut down calculator wi"
+    },
+    {
+      "id": "blind_039",
+      "utterance": "clsoe notepadd app",
+      "expected_intent": "CLOSE_APP",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "typos",
+      "message": "This command involves a potentially destructive action ('close notepad app'). Ex"
+    },
+    {
+      "id": "blind_052",
+      "utterance": "extrct page txt",
+      "expected_intent": "BROWSER_EXTRACT",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "typos",
+      "message": "This command involves a potentially destructive action ('extract page exit'). Ex"
+    },
+    {
+      "id": "blind_067",
+      "utterance": "cloose calculater",
+      "expected_intent": "CLOSE_APP",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "typos",
+      "message": "This command involves a potentially destructive action ('close calculator'). Exp"
+    },
+    {
+      "id": "blind_068",
+      "utterance": "shutt down edgge",
+      "expected_intent": "CLOSE_APP",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "typos",
+      "message": "This command involves a potentially destructive action ('shut down edge'). Expli"
+    },
+    {
       "id": "blind_087",
       "utterance": "not calculator open calculator is wrong open edge",
       "expected_intent": "OPEN_APP",
@@ -46,6 +107,16 @@
       "failure_category": "paraphrase",
       "category": "negation",
       "message": "Understood. I will not execute that action."
+    },
+    {
+      "id": "blind_104",
+      "utterance": "close calculator and open notepad",
+      "expected_intent": "COMPOUND_COMMAND",
+      "predicted_intent": "status=confirmation_required, action=compound",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "compounds",
+      "message": "Step 1 ('close calculator') stopped: This command involves a potentially destruc"
     },
     {
       "id": "blind_105",
@@ -78,6 +149,26 @@
       "message": "Step 1 ('launch notepad, write note,') stopped: I couldn't find an application n"
     },
     {
+      "id": "blind_117",
+      "utterance": "close edge and then open calculator",
+      "expected_intent": "COMPOUND_COMMAND",
+      "predicted_intent": "status=confirmation_required, action=compound",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "compounds",
+      "message": "Step 1 ('close edge') stopped: This command involves a potentially destructive a"
+    },
+    {
+      "id": "blind_119",
+      "utterance": "shut down notepad and status report",
+      "expected_intent": "COMPOUND_COMMAND",
+      "predicted_intent": "status=confirmation_required, action=compound",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "compounds",
+      "message": "Step 1 ('shut down notepad') stopped: This command involves a potentially destru"
+    },
+    {
       "id": "blind_120",
       "utterance": "open games and select wuthering waves",
       "expected_intent": "COMPOUND_COMMAND",
@@ -86,6 +177,26 @@
       "failure_category": "paraphrase",
       "category": "compounds",
       "message": "Step 1 ('open games') stopped: Which game would you like to open? You have Wuthe"
+    },
+    {
+      "id": "blind_124",
+      "utterance": "open edge, search google, and close edge",
+      "expected_intent": "COMPOUND_COMMAND",
+      "predicted_intent": "status=confirmation_required, action=compound",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "compounds",
+      "message": "Step 2 ('close edge') stopped: This command involves a potentially destructive a"
+    },
+    {
+      "id": "blind_129",
+      "utterance": "close notepad and abort automation",
+      "expected_intent": "COMPOUND_COMMAND",
+      "predicted_intent": "status=confirmation_required, action=compound",
+      "confidence": 1.0,
+      "failure_category": "paraphrase",
+      "category": "compounds",
+      "message": "Step 1 ('close notepad') stopped: This command involves a potentially destructiv"
     },
     {
       "id": "blind_137",
@@ -108,24 +219,154 @@
       "message": "I couldn't find an application named 'daily.log' on your computer. Would you lik"
     },
     {
-      "id": "blind_147",
-      "utterance": "restore it",
+      "id": "blind_154",
+      "utterance": "kill that",
       "expected_intent": "PRONOUN_COMMAND",
-      "predicted_intent": "status=clarification_needed, action=ask_clarification",
-      "confidence": 0.307,
-      "failure_category": "paraphrase",
-      "category": "pronouns",
-      "message": "Did you mean to open an app or close an app?"
-    },
-    {
-      "id": "blind_153",
-      "utterance": "bring that up again",
-      "expected_intent": "PRONOUN_COMMAND",
-      "predicted_intent": "status=clarification_needed, action=ask_clarification",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
       "confidence": 1.0,
       "failure_category": "paraphrase",
       "category": "pronouns",
-      "message": "I couldn't find an application named 'bring that up again' on your computer. Wou"
+      "message": "Kill Calculator? (yes/no)"
+    },
+    {
+      "id": "blind_155",
+      "utterance": "scrape it",
+      "expected_intent": "PRONOUN_COMMAND",
+      "predicted_intent": "status=clarification_needed, action=ask_clarification",
+      "confidence": 0.386,
+      "failure_category": "paraphrase",
+      "category": "pronouns",
+      "message": "Did you mean to extract webpage text or close an app?"
+    },
+    {
+      "id": "blind_156",
+      "utterance": "can you please remember that journal means notepad",
+      "expected_intent": "TEACH_WORD_ALIAS",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "Link 'journal' to 'notepad'? (yes/no)"
+    },
+    {
+      "id": "blind_157",
+      "utterance": "when I say surf I mean open edge",
+      "expected_intent": "TEACH_WORD_ALIAS",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "Link 'surf' to 'edge'? (yes/no)"
+    },
+    {
+      "id": "blind_158",
+      "utterance": "remember that diary is notepad",
+      "expected_intent": "TEACH_WORD_ALIAS",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "Link 'diary' to 'notepad'? (yes/no)"
+    },
+    {
+      "id": "blind_159",
+      "utterance": "call edge web browser",
+      "expected_intent": "TEACH_WORD_ALIAS",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "Link 'edge' to 'web browser'? (yes/no)"
+    },
+    {
+      "id": "blind_160",
+      "utterance": "calc is another word for calculator",
+      "expected_intent": "TEACH_WORD_ALIAS",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "Link 'calc' to 'calculator'? (yes/no)"
+    },
+    {
+      "id": "blind_161",
+      "utterance": "from now on consider chronicle to be notepad",
+      "expected_intent": "TEACH_WORD_ALIAS",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "Link 'chronicle' to 'notepad'? (yes/no)"
+    },
+    {
+      "id": "blind_162",
+      "utterance": "please learn that mathapp refers to calculator",
+      "expected_intent": "TEACH_WORD_ALIAS",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "Link 'mathapp' to 'calculator'? (yes/no)"
+    },
+    {
+      "id": "blind_163",
+      "utterance": "when I utter browse, execute edge",
+      "expected_intent": "TEACH_WORD_ALIAS",
+      "predicted_intent": "status=clarification_needed, action=ask_clarification",
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "I cannot learn that: Teaching key 'browse' shadows an existing core command or v"
+    },
+    {
+      "id": "blind_164",
+      "utterance": "let word tally mean calculator",
+      "expected_intent": "TEACH_WORD_ALIAS",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "Link 'tally' to 'calculator'? (yes/no)"
+    },
+    {
+      "id": "blind_166",
+      "utterance": "learn definition epiphany means a moment of sudden revelation",
+      "expected_intent": "TEACH_WORD_ALIAS",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "Link 'epiphany' to 'a moment of sudden revelation'? (yes/no)"
+    },
+    {
+      "id": "blind_167",
+      "utterance": "memorize that sonder means realizing everyone has a vivid life",
+      "expected_intent": "TEACH_WORD_ALIAS",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "Link 'sonder' to 'realizing everyone has a vivid life'? (yes/no)"
+    },
+    {
+      "id": "blind_168",
+      "utterance": "can you store word petrichor definition smell of dust after rain",
+      "expected_intent": "TEACH_WORD_ALIAS",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "Link 'petrichor' to 'smell of dust after rain'? (yes/no)"
+    },
+    {
+      "id": "blind_169",
+      "utterance": "define the word solipsism as theory that only self exists",
+      "expected_intent": "TEACH_WORD_ALIAS",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "Link 'solipsism' to 'theory that only self exists'? (yes/no)"
     },
     {
       "id": "blind_172",
@@ -135,17 +376,77 @@
       "confidence": 0.57,
       "failure_category": "teaching",
       "category": "teaching",
-      "message": "True insta insta shut true find begin begin shut repeat supreme noon noon repeat"
+      "message": "Speed england, certain correction transcript internet again again insta lingua w"
     },
     {
-      "id": "blind_204",
-      "utterance": "rm -rf /",
-      "expected_intent": "CONFIRMATION_REQUIRED",
+      "id": "blind_174",
+      "utterance": "what have you learned so far",
+      "expected_intent": "SYSTEM_STATUS",
+      "predicted_intent": "status=conversational_response, action=None",
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "I haven't learned any custom aliases or words yet.\nI haven't learned any custom "
+    },
+    {
+      "id": "blind_175",
+      "utterance": "show all learned preferences and aliases",
+      "expected_intent": "SYSTEM_STATUS",
+      "predicted_intent": "status=conversational_response, action=None",
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "I haven't learned any custom aliases or words yet.\nI haven't learned any custom "
+    },
+    {
+      "id": "blind_176",
+      "utterance": "link word gamehub to wuthering waves",
+      "expected_intent": "TEACH_WORD_ALIAS",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "Link 'gamehub' to 'wuthering waves'? (yes/no)"
+    },
+    {
+      "id": "blind_177",
+      "utterance": "associate editor with notepad",
+      "expected_intent": "TEACH_WORD_ALIAS",
       "predicted_intent": "status=clarification_needed, action=ask_clarification",
-      "confidence": 0.111,
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "I cannot learn that: Teaching key 'editor' shadows an existing core command or v"
+    },
+    {
+      "id": "blind_178",
+      "utterance": "whenever I say surfnet, launch edge",
+      "expected_intent": "TEACH_WORD_ALIAS",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "Link 'surfnet' to 'edge'? (yes/no)"
+    },
+    {
+      "id": "blind_179",
+      "utterance": "remember computation means calculator",
+      "expected_intent": "TEACH_WORD_ALIAS",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
+      "failure_category": "teaching",
+      "category": "teaching",
+      "message": "Link 'computation' to 'calculator'? (yes/no)"
+    },
+    {
+      "id": "blind_190",
+      "utterance": "remove file secret_database.sqlite",
+      "expected_intent": "DELETE_FILE",
+      "predicted_intent": "status=confirmation_required, action=ask_confirmation",
+      "confidence": 1.0,
       "failure_category": "paraphrase",
       "category": "out_of_scope",
-      "message": "Did you mean to chat conversation or open an app?"
+      "message": "This command involves a potentially destructive action ('remove file secret_data"
     },
     {
       "id": "blind_207",
@@ -155,17 +456,7 @@
       "confidence": 0.57,
       "failure_category": "paraphrase",
       "category": "out_of_scope",
-      "message": "Shut repeat find has shall sensor define win shut define either begin usual erro"
-    },
-    {
-      "id": "blind_209",
-      "utterance": "open games",
-      "expected_intent": "CLARIFICATION_NEEDED",
-      "predicted_intent": "status=dispatched, action=open_app",
-      "confidence": 1.0,
-      "failure_category": "paraphrase",
-      "category": "out_of_scope",
-      "message": "Opening Wuthering Waves!"
+      "message": "Again often west myself each files archive keep archive keep standard aid someon"
     }
   ]
 }

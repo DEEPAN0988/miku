@@ -81,7 +81,7 @@ APP_CATALOG: Dict[str, Dict[str, Any]] = {
     },
     "spotify": {
         "display_name": "Spotify",
-        "aliases": ["spotify", "spotfy", "music"],
+        "aliases": ["spotify", "spotfy"],
         "protocol": "spotify:",
         "executable": "Spotify.exe",
         "url": "https://open.spotify.com",
@@ -166,7 +166,7 @@ APP_CATALOG: Dict[str, Dict[str, Any]] = {
     },
     "edge": {
         "display_name": "Microsoft Edge",
-        "aliases": ["edge", "browser", "web browser", "internet", "microsoft edge", "msedge"],
+        "aliases": ["edge", "microsoft edge", "msedge"],
         "protocol": "microsoft-edge:",
         "executable": "msedge.exe",
         "close_process": ["msedge.exe"],

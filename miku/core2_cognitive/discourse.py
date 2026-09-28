@@ -194,9 +194,9 @@ class DiscourseManager:
         # Match pattern: <action/verb> ... <pronoun> ...
         p_pattern = (
             r"^(?:please\s+)?(?P<verb>close|shut\s+down|terminate|kill|delete|remove|destroy|format|wipe|"
-            r"maximize|minimize|restore|open|scrape|extract|switch\s+(?:back\s+)?to|relaunch|bring\s+(?:up|back\s+up|that\s+up)|run)\s+"
+            r"maximize|minimize|restore|open|scrape|extract|switch\s+(?:back\s+)?to|relaunch|bring|run)\s+"
             r"(?:the\s+)?(?P<pronoun>it|that|that\s+application|that\s+app|that\s+program|that\s+document|that\s+file|that\s+one)"
-            r"(?:\s+again|\s+back|\s+back\s+up|\s+up|\s+please)*$"
+            r"(?:\s+again|\s+back|\s+back\s+up|\s+up|\s+up\s+again|\s+please)*$"
         )
         m = re.match(p_pattern, lower)
         if m:
@@ -216,8 +216,8 @@ class DiscourseManager:
                 # Check if action could lose data or terminates an app
                 is_destructive = verb in ("close", "shut down", "terminate", "kill", "delete", "remove", "destroy", "format", "wipe")
                 
-                # Normalize verbs like "switch back to" -> "open", "relaunch" -> "open"
-                exec_verb = "open" if verb in ("switch to", "switch back to", "relaunch", "bring up") else verb
+                # Normalize verbs like "switch back to" -> "open", "relaunch" -> "open", "bring" -> "open"
+                exec_verb = "open" if verb in ("switch to", "switch back to", "relaunch", "bring") else verb
 
                 reconstructed = f"{exec_verb} {target_entity}"
                 confirmation_prompt = f"{verb.capitalize()} {target_display}? (yes/no)" if is_destructive else None
@@ -269,18 +269,20 @@ class DiscourseManager:
                     "confirmation_prompt": None
                 }
 
-        # Repeat last command
-        if re.match(r"^(?:do\s+that\s+again|run\s+that\s+again(?:\s+please)?|repeat\s+(?:previous|last)(?:\s+command)?|that\s+again(?:\s+please)?)$", lower):
+        # Repeat last command (e.g. "do it again", "run that again")
+        if re.match(r"^(?:do\s+(?:it|that)\s+again|run\s+that\s+again(?:\s+please)?|repeat\s+(?:previous|last)(?:\s+command)?|that\s+again(?:\s+please)?)$", lower):
             last_cmd = entity_stack.get("last_command")
             if last_cmd:
+                # Check if the last command was destructive
+                is_destr = any(last_cmd.lower().startswith(d) for d in ("delete ", "remove ", "kill ", "terminate ", "close ", "shut down ", "format ", "wipe ", "destroy ", "erase "))
                 return {
                     "is_resolved": True,
                     "reconstructed": last_cmd,
                     "original_pronoun": "that",
                     "resolved_entity": last_cmd,
                     "action": "repeat",
-                    "requires_confirmation": False,
-                    "confirmation_prompt": None
+                    "requires_confirmation": is_destr,
+                    "confirmation_prompt": f"Repeat destructive action '{last_cmd}'? (yes/no)" if is_destr else None
                 }
 
         # Contextual selection: "the last one you mentioned", "choose that one", "bring that up again"

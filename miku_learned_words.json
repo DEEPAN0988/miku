@@ -1,20 +1,8 @@
 {
-  "euphoria": {
-    "pos": "noun",
-    "definition": "a state of intense happiness",
-    "synonyms": [],
-    "learned_at": 1790579765.4455307
-  },
-  "serendipity": {
-    "pos": "noun",
-    "definition": "finding good things by chance",
-    "synonyms": [],
-    "learned_at": 1790584486.6864862
-  },
   "wanderlust": {
     "pos": "noun",
     "definition": "strong desire to travel",
     "synonyms": [],
-    "learned_at": 1790584509.1477094
+    "learned_at": 1790599979.1613588
   }
 }

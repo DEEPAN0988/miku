@@ -1,5 +1,137 @@
 {
-  "category_preferences": {},
-  "custom_aliases": {},
-  "history": []
+  "category_preferences": {
+    "games": "wuthering waves"
+  },
+  "custom_aliases": {
+    "diary": "notepad",
+    "work": "edge"
+  },
+  "history": [
+    {
+      "type": "custom_alias",
+      "alias": "diary",
+      "target": "notepad",
+      "time": 1790586820.9088097
+    },
+    {
+      "type": "category_preference",
+      "category": "games",
+      "target": "wuthering waves",
+      "time": 1790586820.9113424
+    },
+    {
+      "type": "custom_alias",
+      "alias": "work",
+      "target": "edge",
+      "time": 1790586820.9179845
+    },
+    {
+      "type": "custom_alias",
+      "alias": "diary",
+      "target": "notepad",
+      "time": 1790587281.3250606
+    },
+    {
+      "type": "category_preference",
+      "category": "games",
+      "target": "wuthering waves",
+      "time": 1790587281.3282678
+    },
+    {
+      "type": "custom_alias",
+      "alias": "work",
+      "target": "edge",
+      "time": 1790587281.335792
+    },
+    {
+      "type": "custom_alias",
+      "alias": "diary",
+      "target": "notepad",
+      "time": 1790587328.8711507
+    },
+    {
+      "type": "category_preference",
+      "category": "games",
+      "target": "wuthering waves",
+      "time": 1790587328.8739932
+    },
+    {
+      "type": "custom_alias",
+      "alias": "work",
+      "target": "edge",
+      "time": 1790587328.88138
+    },
+    {
+      "type": "custom_alias",
+      "alias": "diary",
+      "target": "notepad",
+      "time": 1790587430.7320468
+    },
+    {
+      "type": "category_preference",
+      "category": "games",
+      "target": "wuthering waves",
+      "time": 1790587430.734892
+    },
+    {
+      "type": "custom_alias",
+      "alias": "work",
+      "target": "edge",
+      "time": 1790587430.7419403
+    },
+    {
+      "type": "custom_alias",
+      "alias": "diary",
+      "target": "notepad",
+      "time": 1790593418.1639512
+    },
+    {
+      "type": "category_preference",
+      "category": "games",
+      "target": "wuthering waves",
+      "time": 1790593418.167032
+    },
+    {
+      "type": "custom_alias",
+      "alias": "work",
+      "target": "edge",
+      "time": 1790593418.1750507
+    },
+    {
+      "type": "custom_alias",
+      "alias": "diary",
+      "target": "notepad",
+      "time": 1790593426.3002734
+    },
+    {
+      "type": "category_preference",
+      "category": "games",
+      "target": "wuthering waves",
+      "time": 1790593426.3033218
+    },
+    {
+      "type": "custom_alias",
+      "alias": "work",
+      "target": "edge",
+      "time": 1790593426.3106065
+    },
+    {
+      "type": "custom_alias",
+      "alias": "diary",
+      "target": "notepad",
+      "time": 1790593510.4728007
+    },
+    {
+      "type": "category_preference",
+      "category": "games",
+      "target": "wuthering waves",
+      "time": 1790593510.4757574
+    },
+    {
+      "type": "custom_alias",
+      "alias": "work",
+      "target": "edge",
+      "time": 1790593510.4828994
+    }
+  ]
 }

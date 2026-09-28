@@ -22,8 +22,9 @@ class DeterministicGrammarRouter:
             (r"^(?:open\s+url|navigate\s+to|browse\s+to|browse|navigate)\s+(?P<url>https?://\S+|\S+\.\S+)$", "BROWSER_NAVIGATE", "browser_navigate", {}),
             (r"^(?:open)\s+(?P<url>(?:https?://\S+|www\.\S+|[a-zA-Z0-9_\-]+\.(?:com|org|net|io|edu|gov|co|app|ai|me|dev)(?:/\S*)?))$", "BROWSER_NAVIGATE", "browser_navigate", {}),
             (r"^(?:extract\s+page\s+text|read\s+page|scrape\s+page)$", "BROWSER_EXTRACT", "browser_extract", {}),
-            (r"^(?:solve|bypass|crack)\s+(?:the\s+)?captcha$", "SOLVE_CAPTCHA", "solve_captcha", {}),
-            (r"^(?:enable\s+)?(?:stealth|anti[- ]bot)(?:\s+mode)?$", "ANTI_BOT", "bypass_bot_check", {}),
+            # CAPTCHA / anti-bot evasion is out of scope — route to refusal, never to an action.
+            (r"^(?:solve|bypass|crack|beat|defeat|get\s+past)\s+(?:the\s+)?captcha$", "REFUSE_CAPTCHA_REQUEST", "refuse_oos", {}),
+            (r"^(?:enable\s+)?(?:stealth|anti[- ]bot)(?:\s+mode)?$", "REFUSE_CAPTCHA_REQUEST", "refuse_oos", {}),
 
             # File & Folder Operations
             (r"^(?:open|show)\s+(?:file|folder)\s+(?P<path>.+)$", "OPEN_FILE", "open_file", {}),

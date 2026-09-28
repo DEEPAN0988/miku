@@ -100,6 +100,14 @@ class CognitiveDaemon:
             timestamp=now
         )
         self.action_queue.put(action_msg)
+        
+        # Record entities so that repeat/pronouns work on confirmed actions
+        if action in ("open_app", "close_app") and target:
+            self.dialogue_stack.record_entity("last_app", target)
+        elif action in ("open_file", "search_file", "create_file", "delete_file") and target:
+            self.dialogue_stack.record_entity("last_file", target)
+        self.dialogue_stack.record_entity("last_command", cmd)
+        
         return {
             "query": original_query,
             "status": "dispatched",
@@ -169,6 +177,11 @@ class CognitiveDaemon:
         forget_m = re.match(r"^(?:please\s+)?forget\s+[\"']?([a-zA-Z0-9_\-\. ]+?)[\"']?$", clean_lower)
         if forget_m:
             word = forget_m.group(1).strip().lower()
+            # Strip optional 'word ' / 'alias ' prefix users tend to add
+            for pfx in ("word ", "alias ", "phrase "):
+                if word.startswith(pfx):
+                    word = word[len(pfx):].strip()
+                    break
             lex_forgot = self.cmd_lexicon.forget_word(word)
             learn_forgot = self.learner.forget_alias(word)
             msg = f"I have forgotten '{word}'." if (lex_forgot or learn_forgot) else f"I do not have '{word}' stored in memory."
@@ -326,33 +339,50 @@ class CognitiveDaemon:
             clean_lower = text.lower()
 
         # Step 0-Norm: English Lexicon typo normalization
+        pre_speller_text = text  # save for guard below
         norm = self.normalizer.normalize(text)
         taught_rewritten = self.cmd_lexicon.rewrite_taught_terms(norm["normalized"])
         speller_res = self.safe_speller.correct_sentence(taught_rewritten)
         text = self.cmd_lexicon.rewrite_taught_terms(speller_res["corrected"])
         clean_lower = text.lower()
 
-        # Step 0-Destructive: Safeguard destructive actions (delete, wipe, format, rm, kill process, overwrite)
-        destructive_pat = r"\b(?:delete|remove|format|wipe|destroy|erase|overwrite|kill\s+process|rm\s+-rf|drop\s+table|transfer\s+\d+|send\s+an?\s+email)\b"
-        if re.search(destructive_pat, clean_lower) and not re.search(r"\b(?:close|quit|exit|shut\s+down)\s+(?:notepad|calculator|edge|chrome|wuthering|app|window)\b", clean_lower):
-            return {
-                "query": text,
-                "status": "confirmation_required",
-                "best_action": "ask_confirmation",
-                "confidence": 1.0,
-                "message": f"This command involves a potentially destructive action ('{text}'). Explicit user confirmation is required to proceed. Do you wish to confirm?"
-            }
-
-        # Step 0-OutOfScope: Explicit out-of-scope filter for non-computer requests
-        # Prevents false actions on clearly non-OS phrases
-        oos_pat = r"\b(?:sing(?:\s+me)?(?:\s+a)?\s+(?:song|melody|tune)|dance\s+for\s+me|tell\s+me\s+a\s+(?:joke|story)|what(?:'s|\s+is)\s+the\s+weather|read\s+me\s+a\s+(?:book|story)|give\s+me\s+a\s+hug|make\s+me\s+(?:coffee|tea|food)|cook\s+for\s+me)\b"
-        if re.search(oos_pat, clean_lower):
+        # Step 0-OutOfScope-Early: Identity and physical-world OOS check runs BEFORE the
+        # destructive gate to prevent "who built you" matching "built" as destructive.
+        oos_pat = r"\b(?:sing(?:\s+me)?(?:\s+a)?\s+(?:song|melody|tune)|dance\s+for\s+me|what(?:'s|\s+is)\s+the\s+weather|read\s+me\s+a\s+(?:book|story)|give\s+me\s+a\s+hug|make\s+me\s+(?:coffee|tea|food)|cook\s+for\s+me)\b"
+        oos_identity = r"\b(?:who(?:\s+(?:creat\w*|made|built|wrote|designed|developed|programmed)\s+you)|what\s+are\s+you|who\s+are\s+you|are\s+you\s+(?:a\s+)?(?:ai|robot|human|bot|computer))\b"
+        check_oos = (pre_speller_text + " " + clean_lower).lower()
+        if re.search(oos_pat, check_oos) or re.search(oos_identity, check_oos):
             return {
                 "query": text,
                 "status": "conversational_response",
                 "best_action": None,
                 "confidence": 1.0,
-                "message": "I'm a computer assistant — I can open apps, manage files, and handle system tasks, but that's a bit outside what I can do!"
+                "message": "I am Miku, a computer assistant — I can open apps, manage files, and handle system tasks, but that's a bit outside what I can do!"
+            }
+
+        # Step 0-Destructive: Safeguard destructive actions.
+        # IMPORTANT: Check BOTH the pre-speller text (catches 'wipe', 'shut it') AND the
+        # post-speller text (catches 'close', 'delete', 'terminate' that survive spelling).
+        # This prevents speller substitutions from erasing destructive intent.
+        # Exempt sentences starting with question words (who/what/why/how/when/where) to avoid
+        # false positives on identity and capability queries.
+        destructive_pat = r"\b(?:delete|remove|format|wipe|destroy|erase|overwrite|kill|terminate|close|quit|exit|shut(?:\s+down|\s+it)?|rm\s+-rf|drop\s+table|transfer\s+\d+|send\s+an?\s+email)\b"
+        guard_text = (pre_speller_text + " " + clean_lower).lower()
+        if re.search(destructive_pat, guard_text) and not re.match(r"^(?:who|what|why|how|when|where|are\s+you|do\s+you|is\s+it)\b", clean_lower):
+            # Parse target if it's a close command
+            match = re.search(r"\b(?:close|quit|exit|shut\s+down|kill|terminate)\s+(?:the\s+)?([a-zA-Z0-9_\-\. ]+?)(?:\s+application|\s+app)?$", clean_lower)
+            target = match.group(1).strip() if match else ""
+            
+            self.pending_destructive = {
+                "command": text,
+                "target": target
+            }
+            return {
+                "query": text,
+                "status": "confirmation_required",
+                "best_action": "ask_confirmation",
+                "confidence": 1.0,
+                "message": f"This command involves a potentially destructive action ('{text}'). Explicit user confirmation is required to proceed. Do you wish to confirm? (yes/no)"
             }
 
         # Step 0-Train: Training Intent
@@ -392,69 +422,76 @@ class CognitiveDaemon:
 
         # Step 0-PendingClarification: Multi-turn response
         if self.pending_clarification:
-            cat = self.pending_clarification["category"]
-            options = self.pending_clarification["options"]
-
-            selected_app = None
-            if clean_lower in ("1", "first", "the first one", "first one") and len(options) >= 1:
-                selected_app = options[0]
-            elif clean_lower in ("2", "second", "the second one", "second one") and len(options) >= 2:
-                selected_app = options[1]
-            elif clean_lower in ("3", "third", "the third one", "third one") and len(options) >= 3:
-                selected_app = options[2]
+            # If the user issued a brand new category command or generic intent, drop the clarification and fall through.
+            if (re.match(r"^(?:(?:open(?:\s+up)?|launch|play|start|run|suggest)\s+)?(?:something|anything|whatever|stuff|an?\s+app|an?\s+application|applications?|tools?|some\s+app|a\s+program|some\s+game)(?:\s+(?:to\s+play|to\s+do|fun))?$", clean_lower) or
+                re.match(r"^(?:what\s+should\s+i\s+(?:open|play|run)|suggest\s+(?:an?\s+app|a\s+game|something)|what\s+can\s+i\s+(?:open|play))$", clean_lower) or
+                re.match(r"^(?:(?:open(?:\s+up)?|launch|play|start|run)\s+)?(?:a\s+|some\s+|my\s+)?(?P<cat>games?|browser|web\s+browser|music|songs|social\s+media|social|code\s+editor|editor|ide)$", clean_lower) or
+                re.match(r"^(?:let'?s\s+play(?:\s+a)?\s+games?)$", clean_lower)):
+                self.pending_clarification = None
             else:
-                cand_canonical, _ = predict_app(clean_lower)
-                for opt in options:
-                    opt_canonical, _ = predict_app(opt)
-                    if (clean_lower in opt.lower() or opt.lower() in clean_lower or
-                        cand_canonical == opt_canonical or clean_lower == opt_canonical):
-                        selected_app = opt
-                        break
-                if not selected_app and cand_canonical in APP_CATALOG:
-                    selected_app = cand_canonical
-
-            if selected_app:
-                clarification_category = (self.pending_clarification or {}).get("category")
+                cat = self.pending_clarification["category"]
+                options = self.pending_clarification["options"]
+    
+                selected_app = None
+                if clean_lower in ("1", "first", "the first one", "first one") and len(options) >= 1:
+                    selected_app = options[0]
+                elif clean_lower in ("2", "second", "the second one", "second one") and len(options) >= 2:
+                    selected_app = options[1]
+                elif clean_lower in ("3", "third", "the third one", "third one") and len(options) >= 3:
+                    selected_app = options[2]
+                else:
+                    cand_canonical, _ = predict_app(clean_lower)
+                    for opt in options:
+                        opt_canonical, _ = predict_app(opt)
+                        if (clean_lower in opt.lower() or opt.lower() in clean_lower or
+                            cand_canonical == opt_canonical or clean_lower == opt_canonical):
+                            selected_app = opt
+                            break
+                    if not selected_app and cand_canonical in APP_CATALOG:
+                        selected_app = cand_canonical
+    
+                if selected_app:
+                    clarification_category = (self.pending_clarification or {}).get("category")
+                    self.pending_clarification = None
+    
+                    task_id = str(uuid.uuid4())[:8]
+                    canonical, info = predict_app(selected_app)
+                    action_msg = ActionRequestMsg(
+                        action_type="open_app",
+                        target=canonical,
+                        coords=None,
+                        params={"app": canonical, "app_info": info},
+                        task_id=task_id,
+                        is_compound=False,
+                        timestamp=now
+                    )
+                    self.action_queue.put(action_msg)
+                    # Persist preference so next "open games" dispatches directly
+                    if clarification_category and clarification_category not in ("general",):
+                        self.learner.set_category_preference(clarification_category, canonical)
+                    msg_text = f"Opening {info.get('display_name', selected_app)}!"
+                    return {
+                        "query": text,
+                        "status": "dispatched",
+                        "task_id": task_id,
+                        "best_action": "open_app",
+                        "confidence": 1.0,
+                        "action_msg": action_msg,
+                        "message": msg_text
+                    }
+    
+                elif clean_lower in ("cancel", "nevermind", "never mind", "stop", "abort", "no"):
+                    self.pending_clarification = None
+                    return {
+                        "query": text,
+                        "status": "conversational_response",
+                        "message": "Cancelled.",
+                        "confidence": 1.0
+                    }
                 self.pending_clarification = None
-
-                task_id = str(uuid.uuid4())[:8]
-                canonical, info = predict_app(selected_app)
-                action_msg = ActionRequestMsg(
-                    action_type="open_app",
-                    target=canonical,
-                    coords=None,
-                    params={"app": canonical, "app_info": info},
-                    task_id=task_id,
-                    is_compound=False,
-                    timestamp=now
-                )
-                self.action_queue.put(action_msg)
-                # Persist preference so next "open games" dispatches directly
-                if clarification_category and clarification_category not in ("general",):
-                    self.learner.set_category_preference(clarification_category, canonical)
-                msg_text = f"Opening {info.get('display_name', selected_app)}!"
-                return {
-                    "query": text,
-                    "status": "dispatched",
-                    "task_id": task_id,
-                    "best_action": "open_app",
-                    "confidence": 1.0,
-                    "action_msg": action_msg,
-                    "message": msg_text
-                }
-
-            elif clean_lower in ("cancel", "nevermind", "never mind", "stop", "abort", "no"):
-                self.pending_clarification = None
-                return {
-                    "query": text,
-                    "status": "conversational_response",
-                    "message": "Cancelled.",
-                    "confidence": 1.0
-                }
-            self.pending_clarification = None
 
         # Step 0D-0: Generic / Ambiguous Open Intent
-        if re.match(r"^(?:(?:open(?:\s+up)?|launch|play|start|run|suggest)\s+)?(?:something|anything|whatever|stuff|an?\s+app|an?\s+application|applications?|tools?|some\s+app|a\s+program|some\s+game)(?:\s+(?:to\s+play|to\s+do|fun))?$", clean_lower) or \
+        if re.match(r"^(?:(?:open(?:\s+up)?|launch|play|start|run|suggest)\s+)?(?:something|anything|whatever|stuff|an?\s+app|an?\s+application|applications?|tools?|some\s+app|a\s+program|some\s+game|some\s+software|software|programs?)(?:\s+(?:to\s+play|to\s+do|fun))?$", clean_lower) or \
            re.match(r"^(?:what\s+should\s+i\s+(?:open|play|run)|suggest\s+(?:an?\s+app|a\s+game|something)|what\s+can\s+i\s+(?:open|play))$", clean_lower):
             games = self.app_discovery.get_apps_in_category("games") or ["Wuthering Waves"]
             options = [games[0], "Microsoft Edge", "Notepad", "Calculator"]
@@ -480,7 +517,8 @@ class CognitiveDaemon:
             (r"^(?:(?:open(?:\s+up)?|launch|start)\s+)?(?:a\s+|my\s+)?(?P<cat>browser|web\s+browser)$", "browser"),
             (r"^(?:(?:open(?:\s+up)?|play|listen\s+to)\s+)?(?:some\s+|my\s+)?(?P<cat>music|songs)$", "music"),
             (r"^(?:(?:open(?:\s+up)?|check)\s+)?(?:my\s+)?(?P<cat>social\s+media|social)$", "social"),
-            (r"^(?:(?:open(?:\s+up)?|launch)\s+)?(?:my\s+)?(?P<cat>code\s+editor|editor|ide)$", "developer")
+            (r"^(?:(?:open(?:\s+up)?|launch)\s+)?(?:my\s+)?(?P<cat>code\s+editor|editor|ide)$", "developer"),
+            (r"^(?:(?:open(?:\s+up)?|launch|start|run)\s+)?(?:some\s+|a\s+|my\s+)?(?P<cat>software|apps|programs|applications?)$", "apps")
         ]:
             if re.match(pat, clean_lower):
                 cat_match = cat_name
@@ -511,7 +549,6 @@ class CognitiveDaemon:
                     "action_msg": action_msg,
                     "message": f"Opening your preferred {cat_singular}, {info.get('display_name', preferred)}."
                 }
-            else:
                 options = self.app_discovery.get_apps_in_category(cat_match)
                 if not options:
                     if cat_match == "games":
@@ -521,24 +558,23 @@ class CognitiveDaemon:
                     elif cat_match == "music":
                         options = ["Spotify"]
                     else:
-                        options = []
+                        options = ["Notepad", "Calculator", "Microsoft Edge"]
 
-                if options:
-                    cat_singular = cat_match[:-1] if cat_match.endswith("s") else cat_match
-                    options_str = ", ".join(options)
-                    clarify_msg = f"Which {cat_singular} would you like to open? You have {options_str}."
-                    self.pending_clarification = {
-                        "category": cat_match,
-                        "options": options,
-                        "time": now
-                    }
-                    return {
-                        "query": text,
-                        "status": "clarification_needed",
-                        "best_action": "ask_clarification",
-                        "confidence": 1.0,
-                        "message": clarify_msg
-                    }
+                cat_singular = cat_match[:-1] if cat_match.endswith("s") else cat_match
+                options_str = ", ".join(options)
+                clarify_msg = f"Which {cat_singular} would you like to open? You have {options_str}."
+                self.pending_clarification = {
+                    "category": cat_match,
+                    "options": options,
+                    "time": now
+                }
+                return {
+                    "query": text,
+                    "status": "clarification_needed",
+                    "best_action": "ask_clarification",
+                    "confidence": 1.0,
+                    "message": clarify_msg
+                }
 
         # Step 0E: Apply custom user alias mappings
         parsed_text = text
@@ -546,8 +582,38 @@ class CognitiveDaemon:
             if al in clean_lower:
                 parsed_text = re.sub(rf"\b{re.escape(al)}\b", target, parsed_text, flags=re.I)
 
+        # Step 1A: Explicit Out of Scope / Conversational Intercept
+        if re.match(r"^(?:who|what|why|how|when|where|tell\s+me|do\s+you|are\s+you|can\s+you|could\s+you|would\s+you)\b", clean_lower) and not re.match(r"^(?:what|how|where)\s+(?:is|are|can\s+i\s+find)\s+(?:my\s+)?(?:schedule|calendar|tasks?|agenda|plan)", clean_lower) and not re.match(r"^(?:what|how)\s+(?:is|about)\s+(?:the\s+)?(?:status|system|memory|cpu)", clean_lower):
+            # Let chat engine handle it or return conversational response
+            chat_reply = self.chat_engine.respond(text)
+            return {
+                "query": text,
+                "status": "conversational_response",
+                "message": chat_reply,
+                "confidence": 1.0
+            }
+            
+        if "weather" in clean_lower or re.match(r"^(?:search(?:\s+the\s+web)?\s+for|google|look\s+up|find\s+out)\b", clean_lower):
+            return {
+                "query": text,
+                "status": "conversational_response",
+                "best_action": "None",
+                "confidence": 1.0,
+                "message": "I am a local PC control agent. I do not answer general trivia, check the weather, or perform web searches."
+            }
+
         # 1. Grammar parse (First pass)
         intent, action, params, s_lang = self.grammar.parse(parsed_text)
+
+        # 1A-bis: Refuse any grammar-matched OOS action (CAPTCHA / anti-bot / evasion)
+        if action == "refuse_oos":
+            return {
+                "query": text,
+                "status": "conversational_response",
+                "best_action": "None",
+                "confidence": 1.0,
+                "message": "I cannot help with CAPTCHA solving, anti-bot evasion, or stealth mode. These are out of scope for a local PC control assistant."
+            }
 
         # 1B. Classical Intent Classifier (Second pass for what grammar misses)
         if not action:
@@ -556,6 +622,24 @@ class CognitiveDaemon:
                 c_intent = clf_res["top_intent"]
                 c_conf = clf_res["confidence"]
                 slots = self.slot_tagger.extract_slots(clean_lower, c_intent)
+
+                if c_intent == "OUT_OF_SCOPE":
+                    return {
+                        "query": text,
+                        "status": "conversational_response",
+                        "best_action": "None",
+                        "confidence": c_conf,
+                        "message": "I am a local PC control agent, not a conversational chatbot. I do not generate essays, tell jokes, or answer general knowledge questions. My purpose is to help you automate tasks on your local machine."
+                    }
+                
+                if c_intent == "NEGATION_REFUSAL":
+                    return {
+                        "query": text,
+                        "status": "negation_refusal",
+                        "best_action": "None",
+                        "confidence": c_conf,
+                        "message": "Understood. I will not execute that action."
+                    }
 
                 action_map = {
                     "OPEN_APP": "open_app",
@@ -574,6 +658,7 @@ class CognitiveDaemon:
                     "SYSTEM_STATUS": "status_report",
                     "ABORT_AUTOMATION": "abort_automation",
                     "WINDOW_STATE": "window_state"
+                    # REFUSE_CAPTCHA_REQUEST / ANTI_BOT intentionally omitted — handled above
                 }
                 mapped_action = action_map.get(c_intent)
                 if mapped_action:
@@ -746,6 +831,16 @@ class CognitiveDaemon:
             chat_reply = self.chat_engine.respond(text)
             decision_result["status"] = "conversational_response"
             decision_result["message"] = chat_reply
+
+        # Log misses for the miss-review loop
+        status = decision_result.get("status")
+        if status in ("conversational_response", "clarification_needed", "negation_refusal"):
+            from miku.core2_cognitive.miss_reviewer import log_miss
+            top3 = []
+            if hasattr(self, "intent_classifier"):
+                res = self.intent_classifier.predict(text.strip().lower())
+                top3 = res.get("top3", [])
+            log_miss(text, decision_result.get("message", "No outcome"), decision_result.get("confidence", 0.0), top3)
 
         return decision_result
 
