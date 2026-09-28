@@ -1,0 +1,108 @@
+{"text": "open notepad", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "notepad"}, "id": "train_001"}
+{"text": "launch notepad", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "notepad"}, "id": "train_002"}
+{"text": "start notepad", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "notepad"}, "id": "train_003"}
+{"text": "fire up notepad", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "notepad"}, "id": "train_004"}
+{"text": "open up notepad", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "notepad"}, "id": "train_005"}
+{"text": "open calculator", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "calculator"}, "id": "train_006"}
+{"text": "launch calculator", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "calculator"}, "id": "train_007"}
+{"text": "start calculator", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "calculator"}, "id": "train_008"}
+{"text": "open edge", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "edge"}, "id": "train_009"}
+{"text": "launch edge", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "edge"}, "id": "train_010"}
+{"text": "start edge browser", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "edge"}, "id": "train_011"}
+{"text": "open microsoft edge", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "microsoft edge"}, "id": "train_012"}
+{"text": "open chrome", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "chrome"}, "id": "train_013"}
+{"text": "launch chrome", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "chrome"}, "id": "train_014"}
+{"text": "open wuthering waves", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "wuthering waves"}, "id": "train_015"}
+{"text": "launch wuthering waves", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "wuthering waves"}, "id": "train_016"}
+{"text": "start game wuthering waves", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "wuthering waves"}, "id": "train_017"}
+{"text": "open vlc", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "vlc"}, "id": "train_018"}
+{"text": "launch spotify", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "spotify"}, "id": "train_019"}
+{"text": "open terminal", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "terminal"}, "id": "train_020"}
+{"text": "launch powershell", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "powershell"}, "id": "train_021"}
+{"text": "open cmd", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "cmd"}, "id": "train_022"}
+{"text": "open settings", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "settings"}, "id": "train_023"}
+{"text": "launch control panel", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "control panel"}, "id": "train_024"}
+{"text": "switch to notepad", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "notepad"}, "id": "train_025"}
+{"text": "bring up calculator", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "calculator"}, "id": "train_026"}
+{"text": "visit edge", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "edge"}, "id": "train_027"}
+{"text": "open paint", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "paint"}, "id": "train_028"}
+{"text": "open task manager", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "task manager"}, "id": "train_029"}
+{"text": "launch file explorer", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "file explorer"}, "id": "train_030"}
+{"text": "close notepad", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "notepad"}, "id": "train_031"}
+{"text": "shut down notepad", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "notepad"}, "id": "train_032"}
+{"text": "exit notepad", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "notepad"}, "id": "train_033"}
+{"text": "quit notepad", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "notepad"}, "id": "train_034"}
+{"text": "terminate notepad", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "notepad"}, "id": "train_035"}
+{"text": "kill notepad", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "notepad"}, "id": "train_036"}
+{"text": "close calculator", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "calculator"}, "id": "train_037"}
+{"text": "shut down calculator", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "calculator"}, "id": "train_038"}
+{"text": "quit calculator", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "calculator"}, "id": "train_039"}
+{"text": "close edge", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "edge"}, "id": "train_040"}
+{"text": "terminate edge", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "edge"}, "id": "train_041"}
+{"text": "shut down edge", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "edge"}, "id": "train_042"}
+{"text": "close chrome", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "chrome"}, "id": "train_043"}
+{"text": "exit chrome", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "chrome"}, "id": "train_044"}
+{"text": "close wuthering waves", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "wuthering waves"}, "id": "train_045"}
+{"text": "quit wuthering waves", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "wuthering waves"}, "id": "train_046"}
+{"text": "close window", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "window"}, "id": "train_047"}
+{"text": "close active window", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "active window"}, "id": "train_048"}
+{"text": "close app", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "app"}, "id": "train_049"}
+{"text": "volume up", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "up"}, "id": "train_050"}
+{"text": "turn up the volume", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "up"}, "id": "train_051"}
+{"text": "increase volume", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "up"}, "id": "train_052"}
+{"text": "crank up the audio", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "up"}, "id": "train_053"}
+{"text": "raise volume", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "up"}, "id": "train_054"}
+{"text": "sound up", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "up"}, "id": "train_055"}
+{"text": "volume down", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "down"}, "id": "train_056"}
+{"text": "turn down volume", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "down"}, "id": "train_057"}
+{"text": "decrease sound", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "down"}, "id": "train_058"}
+{"text": "lower audio", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "down"}, "id": "train_059"}
+{"text": "reduce volume", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "down"}, "id": "train_060"}
+{"text": "mute sound", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "mute"}, "id": "train_061"}
+{"text": "silence audio", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "mute"}, "id": "train_062"}
+{"text": "mute volume", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "mute"}, "id": "train_063"}
+{"text": "unmute sound", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "unmute"}, "id": "train_064"}
+{"text": "unmute audio", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "unmute"}, "id": "train_065"}
+{"text": "open https://google.com", "intent": "BROWSER_NAVIGATE", "action": "browser_navigate", "slots": {"url": "https://google.com"}, "id": "train_066"}
+{"text": "browse to google.com", "intent": "BROWSER_NAVIGATE", "action": "browser_navigate", "slots": {"url": "google.com"}, "id": "train_067"}
+{"text": "navigate to github.com", "intent": "BROWSER_NAVIGATE", "action": "browser_navigate", "slots": {"url": "github.com"}, "id": "train_068"}
+{"text": "open url wikipedia.org", "intent": "BROWSER_NAVIGATE", "action": "browser_navigate", "slots": {"url": "wikipedia.org"}, "id": "train_069"}
+{"text": "go to youtube.com", "intent": "BROWSER_NAVIGATE", "action": "browser_navigate", "slots": {"url": "youtube.com"}, "id": "train_070"}
+{"text": "extract page text", "intent": "BROWSER_EXTRACT", "action": "browser_extract", "slots": {}, "id": "train_071"}
+{"text": "read page", "intent": "BROWSER_EXTRACT", "action": "browser_extract", "slots": {}, "id": "train_072"}
+{"text": "scrape page", "intent": "BROWSER_EXTRACT", "action": "browser_extract", "slots": {}, "id": "train_073"}
+{"text": "open file notes.txt", "intent": "OPEN_FILE", "action": "open_file", "slots": {"path": "notes.txt"}, "id": "train_074"}
+{"text": "show file data.csv", "intent": "OPEN_FILE", "action": "open_file", "slots": {"path": "data.csv"}, "id": "train_075"}
+{"text": "open folder downloads", "intent": "OPEN_FILE", "action": "open_file", "slots": {"path": "downloads"}, "id": "train_076"}
+{"text": "find file budget", "intent": "SEARCH_FILE", "action": "search_file", "slots": {"query": "budget"}, "id": "train_077"}
+{"text": "search file summary.docx", "intent": "SEARCH_FILE", "action": "search_file", "slots": {"query": "summary.docx"}, "id": "train_078"}
+{"text": "create file log.txt", "intent": "CREATE_FILE", "action": "create_file", "slots": {"filename": "log.txt"}, "id": "train_079"}
+{"text": "make file notes.md with content hello", "intent": "CREATE_FILE", "action": "create_file", "slots": {"filename": "notes.md", "content": "hello"}, "id": "train_080"}
+{"text": "delete file test.tmp", "intent": "DELETE_FILE", "action": "delete_file", "slots": {"path": "test.tmp"}, "id": "train_081"}
+{"text": "remove file old.bak", "intent": "DELETE_FILE", "action": "delete_file", "slots": {"path": "old.bak"}, "id": "train_082"}
+{"text": "plan my day", "intent": "PLAN_DAY", "action": "plan_day", "slots": {}, "id": "train_083"}
+{"text": "show my schedule", "intent": "PLAN_DAY", "action": "plan_day", "slots": {}, "id": "train_084"}
+{"text": "what do i have today", "intent": "PLAN_DAY", "action": "plan_day", "slots": {}, "id": "train_085"}
+{"text": "add task meeting at 2pm", "intent": "ADD_TASK", "action": "add_task", "slots": {"task": "meeting", "time": "2pm"}, "id": "train_086"}
+{"text": "schedule review at 10am", "intent": "ADD_TASK", "action": "add_task", "slots": {"task": "review", "time": "10am"}, "id": "train_087"}
+{"text": "take screenshot", "intent": "SCREENSHOT", "action": "screenshot", "slots": {}, "id": "train_088"}
+{"text": "screenshot", "intent": "SCREENSHOT", "action": "screenshot", "slots": {}, "id": "train_089"}
+{"text": "capture screen", "intent": "SCREENSHOT", "action": "screenshot", "slots": {}, "id": "train_090"}
+{"text": "click red button", "intent": "CLICK_TARGET", "action": "click_target", "slots": {"color": "red", "target": "button"}, "id": "train_091"}
+{"text": "press blue icon", "intent": "CLICK_TARGET", "action": "click_target", "slots": {"color": "blue", "target": "icon"}, "id": "train_092"}
+{"text": "look at camera", "intent": "INSPECT_CAMERA", "action": "inspect_camera", "slots": {}, "id": "train_093"}
+{"text": "check webcam", "intent": "INSPECT_CAMERA", "action": "inspect_camera", "slots": {}, "id": "train_094"}
+{"text": "system status", "intent": "SYSTEM_STATUS", "action": "status_report", "slots": {}, "id": "train_095"}
+{"text": "status report", "intent": "SYSTEM_STATUS", "action": "status_report", "slots": {}, "id": "train_096"}
+{"text": "health check", "intent": "SYSTEM_STATUS", "action": "status_report", "slots": {}, "id": "train_097"}
+{"text": "stop automation", "intent": "ABORT_AUTOMATION", "action": "abort_automation", "slots": {}, "id": "train_098"}
+{"text": "abort", "intent": "ABORT_AUTOMATION", "action": "abort_automation", "slots": {}, "id": "train_099"}
+{"text": "cancel automation", "intent": "ABORT_AUTOMATION", "action": "abort_automation", "slots": {}, "id": "train_100"}
+{"text": "maximize window", "intent": "WINDOW_STATE", "action": "window_state", "slots": {}, "id": "train_101"}
+{"text": "minimize window", "intent": "WINDOW_STATE", "action": "window_state", "slots": {}, "id": "train_102"}
+{"text": "call diary notepad", "intent": "TEACH_WORD_ALIAS", "action": "teach", "slots": {"alias": "diary", "target": "notepad"}, "id": "train_103"}
+{"text": "when I say surf open edge", "intent": "TEACH_WORD_ALIAS", "action": "teach", "slots": {"alias": "surf", "target": "edge"}, "id": "train_104"}
+{"text": "remember that calc is calculator", "intent": "TEACH_WORD_ALIAS", "action": "teach", "slots": {"alias": "calc", "target": "calculator"}, "id": "train_105"}
+{"text": "what does sovereign mean", "intent": "DEFINE_WORD_QUERY", "action": "query_definition", "slots": {"word": "sovereign"}, "id": "train_106"}
+{"text": "define autonomous", "intent": "DEFINE_WORD_QUERY", "action": "query_definition", "slots": {"word": "autonomous"}, "id": "train_107"}
+{"text": "what is an operating system", "intent": "DEFINE_WORD_QUERY", "action": "query_definition", "slots": {"word": "operating system"}, "id": "train_108"}

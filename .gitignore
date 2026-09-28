@@ -6,5 +6,8 @@ __pycache__/
 *.pth
 *.pkl
 *.wav
-data/
+/data/
+!eval/data/
+miku_*.json
+eval_metrics_report.json
 .pytest_cache/

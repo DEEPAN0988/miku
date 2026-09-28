@@ -1,0 +1,22 @@
+{"text": "start up notepad", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "notepad"}, "id": "dev_001"}
+{"text": "open the calculator app", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "calculator"}, "id": "dev_002"}
+{"text": "launch microsoft edge", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "microsoft edge"}, "id": "dev_003"}
+{"text": "close down notepad", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "notepad"}, "id": "dev_004"}
+{"text": "exit from edge", "intent": "CLOSE_APP", "action": "close_app", "slots": {"target": "edge"}, "id": "dev_005"}
+{"text": "sound mute", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "mute"}, "id": "dev_006"}
+{"text": "boost audio", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "up"}, "id": "dev_007"}
+{"text": "lower the volume", "intent": "SYSTEM_VOLUME", "action": "volume", "slots": {"direction": "down"}, "id": "dev_008"}
+{"text": "snap screen", "intent": "SCREENSHOT", "action": "screenshot", "slots": {}, "id": "dev_009"}
+{"text": "show my day", "intent": "PLAN_DAY", "action": "plan_day", "slots": {}, "id": "dev_010"}
+{"text": "check system health", "intent": "SYSTEM_STATUS", "action": "status_report", "slots": {}, "id": "dev_011"}
+{"text": "halt automation", "intent": "ABORT_AUTOMATION", "action": "abort_automation", "slots": {}, "id": "dev_012"}
+{"text": "browse to python.org", "intent": "BROWSER_NAVIGATE", "action": "browser_navigate", "slots": {"url": "python.org"}, "id": "dev_013"}
+{"text": "read the current page", "intent": "BROWSER_EXTRACT", "action": "browser_extract", "slots": {}, "id": "dev_014"}
+{"text": "open folder projects", "intent": "OPEN_FILE", "action": "open_file", "slots": {"path": "projects"}, "id": "dev_015"}
+{"text": "find file receipts", "intent": "SEARCH_FILE", "action": "search_file", "slots": {"query": "receipts"}, "id": "dev_016"}
+{"text": "don't open edge", "intent": "NEGATION_REFUSAL", "action": null, "slots": {"app": "edge"}, "id": "dev_017"}
+{"text": "open notepad and close calculator", "intent": "COMPOUND_COMMAND", "action": "compound", "slots": {"steps": ["open notepad", "close calculator"]}, "id": "dev_018"}
+{"text": "close it please", "intent": "PRONOUN_COMMAND", "action": "coreference", "slots": {"pronoun": "it", "action": "close"}, "id": "dev_019"}
+{"text": "when I say browser open edge", "intent": "TEACH_WORD_ALIAS", "action": "teach", "slots": {"alias": "browser", "target": "edge"}, "id": "dev_020"}
+{"text": "opne calcultr", "intent": "OPEN_APP", "action": "open_app", "slots": {"app": "calculator"}, "id": "dev_021"}
+{"text": "how do I make soup", "intent": "OUT_OF_SCOPE", "action": null, "slots": {}, "id": "dev_022"}
