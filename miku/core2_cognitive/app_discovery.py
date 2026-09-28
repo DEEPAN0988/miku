@@ -88,3 +88,16 @@ class AppDiscovery:
         if cat in ("game", "games"):
             cat = "games"
         return self.category_index.get(cat, [])
+
+    def find_app(self, query: str) -> Optional[Dict[str, Any]]:
+        q = query.strip().lower()
+        if q in self.cached_apps:
+            return self.cached_apps[q]
+        for name, entry in self.cached_apps.items():
+            if q in name or name in q:
+                return entry
+        import shutil
+        which_path = shutil.which(query)
+        if which_path:
+            return {"name": query, "path": which_path, "type": "executable"}
+        return None

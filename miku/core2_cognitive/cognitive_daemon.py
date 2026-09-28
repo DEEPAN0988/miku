@@ -129,7 +129,7 @@ class CognitiveDaemon:
             elif clean_lower in ("3", "third", "the third one", "third one") and len(options) >= 3:
                 selected_app = options[2]
             else:
-                from miku.core2_cognitive.app_catalog import predict_app
+                from miku.core2_cognitive.app_catalog import predict_app, APP_CATALOG
                 cand_canonical, _ = predict_app(clean_lower)
                 for opt in options:
                     opt_canonical, _ = predict_app(opt)
@@ -137,9 +137,12 @@ class CognitiveDaemon:
                         cand_canonical == opt_canonical or clean_lower == opt_canonical):
                         selected_app = opt
                         break
+                if not selected_app and cand_canonical in APP_CATALOG:
+                    selected_app = cand_canonical
 
             if selected_app:
-                self.learner.set_category_preference(cat, selected_app)
+                if cat != "general":
+                    self.learner.set_category_preference(cat, selected_app)
                 self.pending_clarification = None
 
                 task_id = str(uuid.uuid4())[:8]
@@ -155,7 +158,10 @@ class CognitiveDaemon:
                     timestamp=now
                 )
                 self.action_queue.put(action_msg)
-                cat_singular = cat[:-1] if cat.endswith("s") else cat
+                msg_text = f"Opening {info.get('display_name', selected_app)}!"
+                if cat != "general":
+                    cat_singular = cat[:-1] if cat.endswith("s") else cat
+                    msg_text += f" I've learned this as your preferred {cat_singular}."
                 return {
                     "query": text,
                     "status": "dispatched",
@@ -163,7 +169,7 @@ class CognitiveDaemon:
                     "best_action": "open_app",
                     "confidence": 1.0,
                     "action_msg": action_msg,
-                    "message": f"Opening {selected_app}! I've learned this as your preferred {cat_singular}."
+                    "message": msg_text
                 }
             elif clean_lower in ("cancel", "nevermind", "stop", "abort", "no"):
                 self.pending_clarification = None
@@ -201,6 +207,25 @@ class CognitiveDaemon:
                 "status": "conversational_response",
                 "message": "I've reset all learned preferences and custom aliases.",
                 "confidence": 1.0
+            }
+
+        # Step 0D-0: Generic / Ambiguous Open Intent (e.g. "open something", "play something", "launch something", "open an app")
+        if re.match(r"^(?:(?:open(?:\s+up)?|launch|play|start|run|suggest)\s+)?(?:something|anything|whatever|stuff|an?\s+app|some\s+app|a\s+program|some\s+game)(?:\s+(?:to\s+play|to\s+do|fun))?$", clean_lower) or \
+           re.match(r"^(?:what\s+should\s+i\s+(?:open|play|run)|suggest\s+(?:an?\s+app|a\s+game|something)|what\s+can\s+i\s+(?:open|play))$", clean_lower):
+            games = self.app_discovery.get_apps_in_category("games") or ["Wuthering Waves"]
+            options = [games[0], "Microsoft Edge", "Notepad", "Calculator"]
+            self.pending_clarification = {
+                "category": "general",
+                "options": options,
+                "time": now
+            }
+            options_str = ", ".join(options)
+            return {
+                "query": text,
+                "status": "clarification_needed",
+                "best_action": "ask_clarification",
+                "confidence": 1.0,
+                "message": f"What would you like me to open? You have {options_str}, or you can ask for games, browser, or tools."
             }
 
         # Step 0D: Category Intent Handling (e.g. "games", "open games", "play a game", "browser")
@@ -343,6 +368,45 @@ class CognitiveDaemon:
 
         # Threshold decision
         if best_act == action and confidence >= self.cdsh.threshold and action is not None:
+            if action == "open_app":
+                target_app = (params.get("app") or params.get("target") or "").strip().lower()
+                from miku.core2_cognitive.app_catalog import GENERIC_APP_PLACEHOLDERS, APP_CATALOG
+                if target_app in GENERIC_APP_PLACEHOLDERS or params.get("app_info", {}).get("category") == "generic_placeholder":
+                    games = self.app_discovery.get_apps_in_category("games") or ["Wuthering Waves"]
+                    options = [games[0], "Microsoft Edge", "Notepad", "Calculator"]
+                    self.pending_clarification = {
+                        "category": "general",
+                        "options": options,
+                        "time": now
+                    }
+                    options_str = ", ".join(options)
+                    return {
+                        "query": text,
+                        "status": "clarification_needed",
+                        "best_action": "ask_clarification",
+                        "confidence": 1.0,
+                        "message": f"What would you like me to open? You have {options_str}, or you can ask for games, browser, or tools."
+                    }
+
+                # Unknown app safeguard
+                if target_app not in APP_CATALOG:
+                    found_entry = self.app_discovery.find_app(target_app)
+                    if not found_entry:
+                        games = self.app_discovery.get_apps_in_category("games") or ["Wuthering Waves"]
+                        options = [games[0], "Microsoft Edge", "Notepad", "Calculator"]
+                        self.pending_clarification = {
+                            "category": "general",
+                            "options": options,
+                            "time": now
+                        }
+                        return {
+                            "query": text,
+                            "status": "clarification_needed",
+                            "best_action": "ask_clarification",
+                            "confidence": 1.0,
+                            "message": f"I couldn't find an application named '{target_app}' on your computer. Would you like to open your games, browser, or a desktop app instead?"
+                        }
+
             task_id = str(uuid.uuid4())[:8]
             is_compound = action in ("browser_navigate", "plan_day")
 

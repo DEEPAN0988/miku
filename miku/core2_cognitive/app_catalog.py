@@ -308,6 +308,13 @@ def normalize_command_text(text: str) -> str:
     t = CONVERSATIONAL_SUFFIX_RE.sub("", t).strip()
     return t
 
+GENERIC_APP_PLACEHOLDERS = {
+    "something", "anything", "whatever", "stuff", "an app", "app", "apps",
+    "a program", "program", "programs", "software", "some app", "some game",
+    "something to play", "something fun", "item", "items", "things", "something to do",
+    "something new", "something to open"
+}
+
 def predict_app(raw_name: str) -> Tuple[str, Dict[str, Any]]:
     """
     Predicts and resolves user app name to canonical app name and metadata.
@@ -315,6 +322,15 @@ def predict_app(raw_name: str) -> Tuple[str, Dict[str, Any]]:
     Guarantees no false positive cross-substring collisions (e.g. 'wuthering wave' never matches 'wa').
     """
     clean = raw_name.strip().lower()
+
+    # Guard: Generic placeholders (e.g. "open something", "open an app")
+    if clean in GENERIC_APP_PLACEHOLDERS:
+        return clean, {
+            "display_name": "Something",
+            "aliases": [clean],
+            "executable": clean,
+            "category": "generic_placeholder"
+        }
 
     # Strip prefixes like 'the '
     if clean.startswith("the "):

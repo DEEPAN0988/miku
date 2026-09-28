@@ -23,12 +23,9 @@ def test_language_comprehension():
     orch.start()
 
     daemon = orch.cognitive_daemon
-    total_passed = 0
-    total_tests = 0
+    test_results = []
 
     def evaluate_test(test_num: int, category: str, input_text: str, check_fn, expected_desc: str):
-        nonlocal total_passed, total_tests
-        total_tests += 1
         msg = STTTranscriptMsg(text=input_text, confidence=1.0)
         start_t = time.time()
         res = daemon.handle_transcript(msg)
@@ -36,8 +33,7 @@ def test_language_comprehension():
 
         passed, reason = check_fn(res)
         status_icon = "[PASS]" if passed else "[FAIL]"
-        if passed:
-            total_passed += 1
+        test_results.append(passed)
 
         print(f"\n[{test_num:02d}] [{category}] Input: \"{input_text}\" ({elapsed_ms:.1f}ms)")
         print(f"     Expected: {expected_desc}")
@@ -213,16 +209,32 @@ def test_language_comprehension():
         "Remember preferred game and open Wuthering Waves without re-asking"
     )
 
+    evaluate_test(
+        21, "Generic Placeholder", "OPEN SOMETHING",
+        lambda r: (r.get("status") == "clarification_needed" and "what would you like me to open" in r.get("message", "").lower(), "Asked what to open instead of searching for app named 'something'"),
+        "Prompt user for options when given generic command 'OPEN SOMETHING'"
+    )
+
+    evaluate_test(
+        22, "Unknown App Safeguard", "open mysteryfakeapp",
+        lambda r: (r.get("status") == "clarification_needed" and "couldn't find" in r.get("message", "").lower(), "Politely asked for alternatives instead of failing execution"),
+        "Safely handle non-existent application with clarification prompt"
+    )
+
     # =========================================================================
     # FINAL SCORECARD
     # =========================================================================
+    total_tests = len(test_results)
+    total_passed = sum(1 for p in test_results if p)
+    pass_pct = round((total_passed / total_tests) * 100, 1) if total_tests > 0 else 0.0
+
     print("\n" + "=" * 75)
-    print(f" COMPREHENSION TEST SUMMARY: {total_passed}/{total_tests} PASSED ({round((total_passed / total_tests) * 100, 1)}%)")
+    print(f" COMPREHENSION TEST SUMMARY: {total_passed}/{total_tests} PASSED ({pass_pct}%)")
     print("=" * 75)
 
     orch.shutdown()
-    if total_passed == total_tests:
-        print("[+] ALL 20 ENGLISH LANGUAGE COMPREHENSION TESTS PASSED WITH 100% ACCURACY!")
+    if total_tests > 0 and total_passed == total_tests:
+        print(f"[+] ALL {total_tests} ENGLISH LANGUAGE COMPREHENSION TESTS PASSED WITH 100% ACCURACY!")
         return 0
     else:
         print(f"[-] {total_tests - total_passed} tests did not pass.")

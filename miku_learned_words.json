@@ -1,1 +1,14 @@
-{}
+{
+  "euphoria": {
+    "pos": "noun",
+    "definition": "a state of intense happiness",
+    "synonyms": [],
+    "learned_at": 1790579765.4455307
+  },
+  "serendipity": {
+    "pos": "noun",
+    "definition": "finding good things by chance",
+    "synonyms": [],
+    "learned_at": 1790579743.847232
+  }
+}
