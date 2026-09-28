@@ -102,7 +102,9 @@ class CustomCaptchaSolver:
             best_score = -float("inf")
             for ch, tpl in self.char_templates.items():
                 # Cross-correlation match
-                score = float(np.sum(patch_16 * tpl) - np.sum(np.abs(patch_16 - tpl)))
+                p32 = patch_16.astype(np.int32)
+                t32 = tpl.astype(np.int32)
+                score = float(np.sum(p32 * t32) - np.sum(np.abs(p32 - t32)))
                 if score > best_score:
                     best_score = score
                     best_char = ch

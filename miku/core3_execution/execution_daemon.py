@@ -4,6 +4,7 @@ Handles OS actions, minimum-jerk cursor movement, closed-loop verification,
 CDP browser commands, and AST sandboxed modules.
 """
 import time
+import numpy as np
 from multiprocessing import Queue
 from typing import Optional, Dict, Any, Tuple
 
