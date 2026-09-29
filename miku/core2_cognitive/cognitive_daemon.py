@@ -653,6 +653,15 @@ class CognitiveDaemon:
                         "message": "Understood. I will not execute that action."
                     }
 
+                if c_intent == "REFUSE_CAPTCHA_REQUEST":
+                    return {
+                        "query": text,
+                        "status": "conversational_response",
+                        "best_action": "None",
+                        "confidence": c_conf,
+                        "message": "I cannot help with CAPTCHA solving, anti-bot evasion, or stealth mode. These are out of scope for a local PC control assistant."
+                    }
+
                 action_map = {
                     "OPEN_APP": "open_app",
                     "CLOSE_APP": "close_app",
@@ -844,15 +853,32 @@ class CognitiveDaemon:
             decision_result["status"] = "conversational_response"
             decision_result["message"] = chat_reply
 
-        # Log misses for the miss-review loop
+        # Log misses for the miss-review loop.
+        # IMPORTANT: outcome must record the machine-readable system status, NOT the
+        # chat engine's generated reply.  The chat engine uses stochastic sampling
+        # (np.random.choice) so its text is non-deterministic and meaningless as a
+        # system outcome.  We record the status code and the top predicted intent
+        # instead, so the miss-review loop shows actionable signal.
         status = decision_result.get("status")
         if status in ("conversational_response", "clarification_needed", "negation_refusal"):
             from miku.core2_cognitive.miss_reviewer import log_miss
             top3 = []
+            top_intent = "UNKNOWN"
             if hasattr(self, "intent_classifier"):
                 res = self.intent_classifier.predict(text.strip().lower())
                 top3 = res.get("top3", [])
-            log_miss(text, decision_result.get("message", "No outcome"), decision_result.get("confidence", 0.0), top3)
+                if top3:
+                    top_intent = top3[0][0]
+            # Build a deterministic, human-readable outcome string from system state only.
+            # Never use decision_result["message"] here — that may be LM-generated text.
+            real_outcome = f"status={status} | top_intent={top_intent}"
+            if status == "clarification_needed":
+                # For clarification, record the clarifying question (a fixed template string,
+                # not generated text) so reviewers know what was asked.
+                clarify_q = decision_result.get("clarification_question", "")
+                if clarify_q:
+                    real_outcome = f"status=clarification_needed | question={clarify_q[:120]}"
+            log_miss(text, real_outcome, decision_result.get("confidence", 0.0), top3)
 
         return decision_result
 
