@@ -1,5 +1,5 @@
 """
-Test Suite: Custom Open-Ended Chat Engine & Custom Deep Scene Understanding.
+Test Suite: Custom Open-Ended Chat Engine & Custom Scene Features.
 Verifies from-scratch neural and spatial modules operating with Zero APIs and Zero Pretrained Weights.
 """
 import unittest

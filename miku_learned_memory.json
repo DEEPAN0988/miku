@@ -1,14 +1,5 @@
 {
-  "category_preferences": {
-    "browser": "edge"
-  },
+  "category_preferences": {},
   "custom_aliases": {},
-  "history": [
-    {
-      "type": "category_preference",
-      "category": "browser",
-      "target": "edge",
-      "time": 1790616018.1592126
-    }
-  ]
+  "history": []
 }

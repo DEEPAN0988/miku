@@ -25,7 +25,7 @@ def get_isolated_daemon(temp_dir: str):
         q = Queue()
         daemon = CognitiveDaemon(action_queue=q)
         daemon.learner.filepath = Path(temp_dir) / "miku_learned_memory.json"
-        daemon.learner.data = {"custom_aliases": {}, "category_preferences": {}}
+        daemon.learner.data = {"custom_aliases": {}, "category_preferences": {}, "history": []}
         
         daemon.lexicon.words_filepath = Path(temp_dir) / "miku_learned_words.json"
         daemon.lexicon.learned_words = {}

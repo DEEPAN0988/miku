@@ -7,8 +7,7 @@ By shifting to a template-driven generation approach, Miku now has broad and var
 |--------|----------------|
 | BROWSER_NAVIGATE | 232 |
 | BROWSER_EXTRACT | 218 |
-| SOLVE_CAPTCHA | 222 |
-| ANTI_BOT | 228 |
+
 | OPEN_FILE | 224 |
 | DELETE_FILE | 1002 |
 | SEARCH_FILE | 222 |

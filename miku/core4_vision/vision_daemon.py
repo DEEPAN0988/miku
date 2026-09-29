@@ -94,7 +94,7 @@ class VisionDaemon:
             )
             detections.append(det)
 
-        # 5. Custom Deep Scene Understanding
+        # 5. Custom Scene Understanding
         scene_info = self.scene_engine.analyze_scene(rgb_frame)
         det_scene = VisionDetectionMsg(
             label=f"scene_{scene_info['scene_class']}",

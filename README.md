@@ -22,7 +22,7 @@ Miku is an autonomous, on-device AI voice assistant built entirely without third
   │TD-PSOLA TTS   │◀─ CDSH Intent   │◀─ CDP Browser   │─▶ Lucas-Kanade  │
   │Shared RingBuf │ │  Router       │ │  Driver       │ │  Optical Flow │
   │(0-disk PCM)   │ │Custom LM Chat │ │Min-Jerk Motion│ │Kalman Tracker │
-  │               │ │SQLite+BM25 Mem│ │Anti-Bot/CAPTCHA│ │Scene Underst. │
+  │               │ │SQLite+BM25 Mem│ │               │ │               │
   └───────────────┘ └───────┬───────┘ └───────────────┘ └───────┬───────┘
                             │                                   │
                             │◀────── Detections (IPC Queue) ────┘
@@ -40,8 +40,7 @@ Miku is an autonomous, on-device AI voice assistant built entirely without third
 | Capability | Supported? | Implementation |
 |---|:---:|---|
 | **Free-Form Chat & Conversation** | ✅ **Yes** | Custom Causal Transformer LM (trained from scratch, zero cloud APIs) |
-| **Deep Scene Understanding** | ✅ **Yes** | Custom Spatial Pyramid Matching & Texture Engine (zero cloud APIs) |
-| **Anti-Bot & CAPTCHA Bypass** | ✅ **Yes** | Custom text template matcher, slider gap locator, audio decoder & CDP stealth injection |
+
 | **Local OS & App Control** | ✅ **Yes** | Win32 SendInput, Minimum-Jerk Motion, Closed-Loop Clicks |
 | **Offline Voice (STT & TTS)** | ✅ **Yes** | GMM-HMM + TD-PSOLA (0 disk PCM, 100% on-device) |
 | **Total Privacy (0 Cloud Traffic)** | ✅ **Yes** | 100% On-device, 0 bytes sent externally |

@@ -595,7 +595,8 @@ class CognitiveDaemon:
                 parsed_text = re.sub(rf"\b{re.escape(al)}\b", target, parsed_text, flags=re.I)
 
         # Step 1A: Explicit Out of Scope / Conversational Intercept
-        if re.match(r"^(?:who|what|why|how|when|where|tell\s+me|do\s+you|are\s+you|can\s+you|could\s+you|would\s+you)\b", clean_lower) and not re.match(r"^(?:what|how|where)\s+(?:is|are|can\s+i\s+find)\s+(?:my\s+)?(?:schedule|calendar|tasks?|agenda|plan)", clean_lower) and not re.match(r"^(?:what|how)\s+(?:is|about)\s+(?:the\s+)?(?:status|system|memory|cpu)", clean_lower):
+        qa_chat_pattern = r"^(?:who|what|why|how|when|where|tell\s+me|do\s+you|are\s+you|can\s+you|could\s+you|would\s+you|hi|hello|hey|yo|sup|greetings|good\s+(?:morning|afternoon|evening|night)|howdy|are\s+okay)\b|^\?+$"
+        if re.match(qa_chat_pattern, clean_lower) and not re.match(r"^(?:what|how|where)\s+(?:is|are|can\s+i\s+find)\s+(?:my\s+)?(?:schedule|calendar|tasks?|agenda|plan)", clean_lower) and not re.match(r"^(?:what|how)\s+(?:is|about)\s+(?:the\s+)?(?:status|system|memory|cpu)", clean_lower):
             # Let chat engine handle it or return conversational response
             chat_reply = self.chat_engine.respond(text)
             return {
@@ -699,7 +700,8 @@ class CognitiveDaemon:
             else:
                 self.active_learning.log_failure(parsed_text, "low_confidence_intent", clf_res["confidence"], clf_res["top_intent"])
                 # If conversational or QA query, let chat engine handle it
-                if re.match(r"^(?:who|what|why|how|when|where|tell\s+me|do\s+you|are\s+you|can\s+you|could\s+you|would\s+you)\b", clean_lower):
+                qa_chat_pattern = r"^(?:who|what|why|how|when|where|tell\s+me|do\s+you|are\s+you|can\s+you|could\s+you|would\s+you|hi|hello|hey|yo|sup|greetings|good\s+(?:morning|afternoon|evening|night)|howdy|are\s+okay)\b|^\?+$"
+                if re.match(qa_chat_pattern, clean_lower):
                     chat_reply = self.chat_engine.respond(text)
                     return {
                         "query": text,

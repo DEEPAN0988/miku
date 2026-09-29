@@ -1,4 +1,4 @@
-﻿"""
+"""
 Paraphrase Rewriter for Miku's Cognitive Pipeline.
 Core 2: Cognitive Router (Brain & Memory)
 
@@ -31,14 +31,6 @@ def _r(pattern: str, repl: _Repl, flags: int = re.IGNORECASE) -> _Rule:
 # OPEN_APP paraphrase rules  (each rewrites to "open <app>")
 # ---------------------------------------------------------------------------
 _OPEN_RULES: List[_Rule] = [
-    # "give <X> a spin / a go / a try / a whirl"
-    _r(r"^give\s+(?:the\s+)?(.+?)\s+a\s+(?:spin|go|try|whirl|shot)(?:\s+on\s+my\s+screen)?$",
-       lambda m: f"open {m.group(1).strip()}"),
-
-    # "get <X> going / running / started / up / up and running"
-    _r(r"^get\s+(?:the\s+)?(.+?)\s+(?:going|running|started|up\s+and\s+running|up)(?:\s+for\s+me)?(?:\s+right\s+now)?$",
-       lambda m: f"open {m.group(1).strip()}"),
-
     # "summon <X> [window]"
     _r(r"^summon\s+(?:the\s+)?(.+?)(?:\s+window)?(?:\s+for\s+me)?$",
        lambda m: f"open {m.group(1).strip()}"),
@@ -71,10 +63,6 @@ _OPEN_RULES: List[_Rule] = [
     _r(r"^(?:pull|load|boot)\s+up\s+(?:the\s+)?(.+?)(?:\s+(?:application|app|program|window))?$",
        lambda m: f"open {m.group(1).strip()}"),
 
-    # Rambling prefix: "ok so ... could you maybe open the music thing"
-    _r(r"^(?:ok(?:ay)?[\s,]+)?(?:so[\s,]+)?(?:i\s+was\s+thinking[\s,]+)?(?:(?:could|can|would)\s+you\s+maybe\s+)?(?:open|launch|start|fire\s+up|pull\s+up)\s+(?:the\s+)?(.+?)(?:\s+(?:application|app|program|window|thing|thingy))?(?:\s+please)?$",
-       lambda m: f"open {m.group(1).strip()}"),
-
     # "let me use / access / check out <X>"
     _r(r"^let\s+me\s+(?:use|access|check\s+out|have\s+a\s+look\s+at)\s+(?:the\s+)?(.+?)(?:\s+(?:application|app|program))?$",
        lambda m: f"open {m.group(1).strip()}"),
@@ -90,10 +78,6 @@ _OPEN_RULES: List[_Rule] = [
 _CLOSE_RULES: List[_Rule] = [
     # "get rid of / eliminate / ditch / scrap <X>"
     _r(r"^(?:get\s+rid\s+of|eliminate|ditch|scrap)\s+(?:the\s+)?(.+?)(?:\s+(?:right\s+away|now|immediately|please|app|application|window))*$",
-       lambda m: f"close {m.group(1).strip()}"),
-
-    # "dismiss <X> [from (the) screen]"
-    _r(r"^dismiss\s+(?:the\s+)?(.+?)(?:\s+from\s+(?:the\s+)?(?:screen|display))?(?:\s+please)?$",
        lambda m: f"close {m.group(1).strip()}"),
 
     # "take <X> off [the screen]"
@@ -122,7 +106,7 @@ _CLOSE_RULES: List[_Rule] = [
 # ---------------------------------------------------------------------------
 _VOLUME_RULES: List[_Rule] = [
     _r(r"^make\s+(?:it|the\s+(?:sound|volume|audio))\s+(?:louder|higher|bigger)$", "volume up"),
-    _r(r"^make\s+(?:it|the\s+(?:sound|volume|audio))\s+(?:quieter|softer|lower|smaller)$", "volume down"),
+
     _r(r"^quiet\s+(?:it|the\s+(?:sound|audio|volume))?(?:\s+down)?$", "volume down"),
     _r(r"^(?:cut|kill)\s+(?:the\s+)?(?:sound|audio|volume|music)$", "mute"),
     _r(r"^pump\s+(?:it\s+up|up\s+(?:the\s+)?(?:volume|sound|audio))$", "volume up"),

@@ -36,6 +36,8 @@ def main():
     
     for rule in router.rules:
         intent = rule["intent"]
+        if intent == "REFUSE_CAPTCHA_REQUEST":
+            continue
         if intent not in capabilities:
             capabilities[intent] = {
                 "intent": intent,

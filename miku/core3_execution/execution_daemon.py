@@ -14,8 +14,6 @@ from miku.core3_execution.closed_loop_click import ClosedLoopVerifier
 from miku.core3_execution.os_actions import OSActionsExecutor
 from miku.core3_execution.cdp_browser import CDPBrowserDriver
 from miku.core3_execution.ast_sandbox import ASTSandboxRunner
-from miku.core3_execution.captcha_solver import CustomCaptchaSolver
-from miku.core3_execution.anti_bot import AntiBotProfile
 
 class ExecutionDaemon:
     def __init__(
@@ -30,8 +28,6 @@ class ExecutionDaemon:
         self.os_exec = OSActionsExecutor()
         self.cdp = CDPBrowserDriver()
         self.sandbox = ASTSandboxRunner()
-        self.captcha_solver = CustomCaptchaSolver()
-        self.anti_bot = AntiBotProfile()
 
         self.user_interrupted: bool = False
 
@@ -136,29 +132,7 @@ class ExecutionDaemon:
             self.result_queue.put(res)
             return res
 
-        # 7. CAPTCHA Solving (Text / Slider / Audio)
-        if request.action_type == "solve_captcha":
-            captcha_type = request.params.get("captcha_type", "text")
-            if captcha_type == "text":
-                sample_img = request.params.get("image", np.full((32, 100), 200, dtype=np.uint8))
-                solution = self.captcha_solver.solve_text_captcha(sample_img)
-                res = ActionResultMsg(task_id=request.task_id, success=True, status="completed", message=f"Solved text CAPTCHA: '{solution}'")
-            elif captcha_type == "slider":
-                gap_x = self.captcha_solver.solve_slider_puzzle_gap(np.zeros((100, 200), dtype=np.uint8))
-                res = ActionResultMsg(task_id=request.task_id, success=True, status="completed", message=f"Detected slider puzzle gap at X={gap_x}px")
-            else:
-                audio_sig = request.params.get("audio", np.zeros(8000, dtype=np.float32))
-                digits = self.captcha_solver.solve_audio_digits(audio_sig)
-                res = ActionResultMsg(task_id=request.task_id, success=True, status="completed", message=f"Decoded audio CAPTCHA digits: '{digits}'")
-            self.result_queue.put(res)
-            return res
 
-        # 8. Anti-Bot Stealth Profile Injection
-        if request.action_type == "bypass_bot_check":
-            payload = self.anti_bot.get_cdp_stealth_payload()
-            res = ActionResultMsg(task_id=request.task_id, success=True, status="completed", message="Applied CDP stealth anti-bot profile (webdriver masked, navigator.plugins spoofed)")
-            self.result_queue.put(res)
-            return res
 
         # Fallback completion
         res = ActionResultMsg(task_id=request.task_id, success=True, status="completed", message=f"Executed {request.action_type}")

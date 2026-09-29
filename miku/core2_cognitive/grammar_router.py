@@ -25,6 +25,7 @@ class DeterministicGrammarRouter:
             # CAPTCHA / anti-bot evasion is out of scope — route to refusal, never to an action.
             (r"^(?:solve|bypass|crack|beat|defeat|get\s+past)\s+(?:the\s+)?captcha$", "REFUSE_CAPTCHA_REQUEST", "refuse_oos", {}),
             (r"^(?:enable\s+)?(?:stealth|anti[- ]bot)(?:\s+mode)?$", "REFUSE_CAPTCHA_REQUEST", "refuse_oos", {}),
+            (r".*(?:captcha|anti[- ]?bot|bot check).*", "REFUSE_CAPTCHA_REQUEST", "refuse_oos", {}),
 
             # File & Folder Operations
             (r"^(?:open|show)\s+(?:file|folder)\s+(?P<path>.+)$", "OPEN_FILE", "open_file", {}),
@@ -35,14 +36,9 @@ class DeterministicGrammarRouter:
             # Window State
             (r"^(?:maximize|minimize|restore)\s+(?:the\s+)?(?:window|app)$", "WINDOW_STATE", "window_state", {}),
 
-            # OS & Application Control (Natural phrasing: open, launch, go to, visit, fire up, bring up,
-            # summon, display, show me, spin up, pull up, load up, boot up)
-            (r"^(?:open(?:\s+up)?|launch|start|fire\s+up|go\s+to|visit|take\s+me\s+to|bring\s+up|switch\s+to|restore|summon|display|show\s+me)\s+(?:the\s+)?(?P<app>[a-zA-Z0-9_\-\. ]+?)(?:\s+application|\s+app|\s+website|\s+site|\s+page)?$", "OPEN_APP", "open_app", {}),
-            # Polite / indirect open forms: "would you mind bringing up edge", "could you please open calculator"
-            # Also covers gerund forms after filler stripping: "bringing up edge", "launching edge"
-            (r"^(?:(?:would\s+you\s+mind|could\s+you\s+(?:please\s+)?|can\s+you\s+(?:please\s+)?|please)\s+)?(?:open(?:ing)?(?:\s+up)?|launch(?:ing)?|start(?:ing)?|fire\s+up|bring(?:ing)?\s+up|pull(?:ing)?\s+up|load(?:ing)?\s+up|boot(?:ing)?\s+up|restore(?:ing)?|summon(?:ing)?|display(?:ing)?)\s+(?:the\s+)?(?P<app>[a-zA-Z0-9_\-\. ]+?)(?:\s+application|\s+app|\s+website|\s+site|\s+page|\s+for\s+me)?$", "OPEN_APP", "open_app", {}),
-            # Close / terminate: extended with dismiss, get rid of, ditch, eliminate
-            (r"^(?:close(?:\s+down)?|shut(?:\s+down)?|exit(?:\s+from)?|terminate|kill|quit|dismiss|eliminate|ditch|scrap|get\s+rid\s+of)\s+(?:the\s+)?(?P<target>[a-zA-Z0-9_\-\. ]+?)(?:\s+application|\s+app)?(?:\s+(?:right\s+away|now|please|immediately))?$", "CLOSE_APP", "close_app", {}),
+            (r"^(?:open(?:\s+up)?|launch|start|fire\s+up|go\s+to|visit|take\s+me\s+to|bring\s+up|switch\s+to|restore)\s+(?:the\s+)?(?P<app>[a-zA-Z0-9_\-\. ]+?)(?:\s+application|\s+app|\s+website|\s+site|\s+page)?$", "OPEN_APP", "open_app", {}),
+            # Close / terminate
+            (r"^(?:close(?:\s+down)?|shut(?:\s+down)?|exit(?:\s+from)?|terminate|kill|quit)\s+(?:the\s+)?(?P<target>[a-zA-Z0-9_\-\. ]+?)(?:\s+application|\s+app)?(?:\s+(?:right\s+away|now|please|immediately))?$", "CLOSE_APP", "close_app", {}),
             
             # System Volume & Media (Natural phrasing: volume up, turn up volume, increase sound, mute, unmute)
             (r"^(?:volume|sound)\s+(?P<direction>up|down|mute|unmute)$", "SYSTEM_VOLUME", "volume", {}),

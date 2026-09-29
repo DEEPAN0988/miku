@@ -1,5 +1,5 @@
 """
-Custom Deep Scene Understanding Engine Built From Scratch.
+Custom Scene Understanding Engine Built From Scratch.
 Zero Cloud APIs. Zero Pre-trained Weights.
 Uses Spatial Pyramid Matching (SPM), Multi-Scale Gradient Orientation Histograms (HOG),
 and Color-Spatial Moments to classify and describe scenes deterministically.

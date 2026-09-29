@@ -3,8 +3,8 @@ Live Interactive Test Script for MIKU v1.3.0
 Tests the complete multi-core pipeline:
 1. Core 1: Live microphone input & TD-PSOLA speech synthesis
 2. Core 2: CDSH Intent Routing & Custom From-Scratch Causal Transformer Chat
-3. Core 3: OS Automation (App launch, volume, CAPTCHA solver, stealth)
-4. Core 4: Live camera / screen capture with Scene Understanding & Viola-Jones
+3. Core 3: OS Automation (App launch, volume)
+4. Core 4: Live camera / screen capture with Viola-Jones
 """
 import sys
 import time
@@ -37,9 +37,7 @@ def run_live_test():
     commands = [
         ("open notepad", "open_app"),
         ("volume up", "volume"),
-        ("solve captcha", "solve_captcha"),
-        ("enable stealth mode", "bypass_bot_check")
-    ]
+        # (removed out of scope checks)
     for cmd, expected_act in commands:
         msg = STTTranscriptMsg(text=cmd, confidence=1.0)
         decision = orch.cognitive_daemon.handle_transcript(msg)
@@ -49,7 +47,7 @@ def run_live_test():
             print(f"  Execution Output: [{res.status}] {res.message}")
         time.sleep(0.5)
 
-    print("\n--- [TEST 3: Live Visual Perception & Deep Scene Understanding] ---")
+    print("\n--- [TEST 3: Live Visual Perception] ---")
     try:
         import cv2
         cap = cv2.VideoCapture(0)
