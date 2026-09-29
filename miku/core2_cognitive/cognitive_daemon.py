@@ -637,12 +637,13 @@ class CognitiveDaemon:
                 slots = self.slot_tagger.extract_slots(clean_lower, c_intent)
 
                 if c_intent == "OUT_OF_SCOPE":
+                    chat_reply = self.chat_engine.respond(text)
                     return {
                         "query": text,
                         "status": "conversational_response",
                         "best_action": "None",
                         "confidence": c_conf,
-                        "message": "I am a local PC control agent, not a conversational chatbot. I do not generate essays, tell jokes, or answer general knowledge questions. My purpose is to help you automate tasks on your local machine."
+                        "message": chat_reply
                     }
                 
                 if c_intent == "NEGATION_REFUSAL":

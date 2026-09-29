@@ -106,3 +106,118 @@
 {"text": "what does sovereign mean", "intent": "DEFINE_WORD_QUERY", "action": "query_definition", "slots": {"word": "sovereign"}, "id": "train_106"}
 {"text": "define autonomous", "intent": "DEFINE_WORD_QUERY", "action": "query_definition", "slots": {"word": "autonomous"}, "id": "train_107"}
 {"text": "what is an operating system", "intent": "DEFINE_WORD_QUERY", "action": "query_definition", "slots": {"word": "operating system"}, "id": "train_108"}
+
+{"text": "hi", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_109"}
+{"text": "hi miku", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_110"}
+{"text": "hello", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_111"}
+{"text": "hello miku", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_112"}
+{"text": "hey", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_113"}
+{"text": "hey miku", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_114"}
+{"text": "yo", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_115"}
+{"text": "sup", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_116"}
+{"text": "howdy", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_117"}
+{"text": "good morning", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_118"}
+{"text": "good morning miku", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_119"}
+{"text": "good afternoon", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_120"}
+{"text": "good afternoon miku", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_121"}
+{"text": "good evening", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_122"}
+{"text": "good evening miku", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_123"}
+{"text": "good night", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_124"}
+{"text": "good night miku", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_125"}
+{"text": "greetings", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_126"}
+{"text": "what is up", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_127"}
+{"text": "whats up", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_128"}
+{"text": "bye", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_129"}
+{"text": "goodbye", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_130"}
+{"text": "see you", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_131"}
+{"text": "see you later", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_132"}
+{"text": "talk later", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_133"}
+{"text": "take care", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_134"}
+{"text": "later", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_135"}
+{"text": "peace", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_136"}
+{"text": "how are you", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_137"}
+{"text": "how are you doing", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_138"}
+{"text": "are you okay", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_139"}
+{"text": "are you alright", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_140"}
+{"text": "how is it going", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_141"}
+{"text": "how are things", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_142"}
+{"text": "what are you up to", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_143"}
+{"text": "how do you feel", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_144"}
+{"text": "who are you", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_145"}
+{"text": "what are you", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_146"}
+{"text": "what is your name", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_147"}
+{"text": "are you an ai", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_148"}
+{"text": "are you a robot", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_149"}
+{"text": "are you human", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_150"}
+{"text": "tell me about yourself", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_151"}
+{"text": "who made you", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_152"}
+{"text": "thanks", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_153"}
+{"text": "thank you", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_154"}
+{"text": "thank you miku", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_155"}
+{"text": "thank you for your help", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_156"}
+{"text": "cheers", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_157"}
+{"text": "good job", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_158"}
+{"text": "well done", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_159"}
+{"text": "nice", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_160"}
+{"text": "perfect", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_161"}
+{"text": "awesome", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_162"}
+{"text": "great", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_163"}
+{"text": "okay", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_164"}
+{"text": "ok", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_165"}
+{"text": "got it", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_166"}
+{"text": "understood", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_167"}
+{"text": "makes sense", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_168"}
+{"text": "help me", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_169"}
+{"text": "help", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_170"}
+{"text": "what can you do", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_171"}
+{"text": "what can you help with", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_172"}
+{"text": "what do you do", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_173"}
+{"text": "show me what you can do", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_174"}
+{"text": "what are your features", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_175"}
+{"text": "how do you work", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_176"}
+{"text": "can you help me", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_177"}
+{"text": "tell me a joke", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_178"}
+{"text": "say something funny", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_179"}
+{"text": "do you like music", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_180"}
+{"text": "what do you think", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_181"}
+{"text": "what is your opinion", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_182"}
+{"text": "are you smart", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_183"}
+{"text": "do you have feelings", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_184"}
+{"text": "do you think", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_185"}
+{"text": "can you feel", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_186"}
+{"text": "are you conscious", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_187"}
+{"text": "next", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_188"}
+{"text": "me only", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_189"}
+{"text": "other than that", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_190"}
+{"text": "nevermind", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_191"}
+{"text": "forget it", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_192"}
+{"text": "nothing", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_193"}
+{"text": "not really", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_194"}
+{"text": "yes", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_195"}
+{"text": "no", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_196"}
+{"text": "maybe", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_197"}
+{"text": "sure", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_198"}
+{"text": "alright", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_199"}
+{"text": "interesting", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_200"}
+{"text": "i see", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_201"}
+{"text": "really", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_202"}
+{"text": "seriously", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_203"}
+{"text": "cool", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_204"}
+{"text": "wow", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_205"}
+{"text": "what", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_206"}
+{"text": "huh", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_207"}
+{"text": "oh", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_208"}
+{"text": "hmm", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_209"}
+{"text": "aha", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_210"}
+{"text": "i am bored", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_211"}
+{"text": "entertain me", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_212"}
+{"text": "talk to me", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_213"}
+{"text": "let us chat", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_214"}
+{"text": "have a conversation", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_215"}
+{"text": "what is new", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_216"}
+{"text": "anything new", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_217"}
+{"text": "still long way to go", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_218"}
+{"text": "keep going", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_219"}
+{"text": "continue", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_220"}
+{"text": "go on", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_221"}
+{"text": "proceed", "intent": "OUT_OF_SCOPE", "action": "out_of_scope", "slots": {}, "id": "train_222"}
