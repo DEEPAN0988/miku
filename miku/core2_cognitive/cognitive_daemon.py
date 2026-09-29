@@ -60,6 +60,7 @@ class CognitiveDaemon:
         from miku.core2_cognitive.safe_speller import SafeSpeller
         from miku.core2_cognitive.dialogue_stack import DialogueStackManager
         from miku.core2_cognitive.active_learning import ActiveLearningManager
+        from miku.core2_cognitive.paraphrase_rewriter import ParaphraseRewriter
 
         self.normalizer = Normalizer()
         self.cmd_lexicon = CommandLexicon()
@@ -69,6 +70,7 @@ class CognitiveDaemon:
         self.safe_speller = SafeSpeller()
         self.dialogue_stack = DialogueStackManager()
         self.active_learning = ActiveLearningManager()
+        self.paraphrase_rewriter = ParaphraseRewriter()
 
         self.latest_vision_detection: Optional[VisionDetectionMsg] = None
         self.latest_vision_time: float = 0.0
@@ -346,6 +348,15 @@ class CognitiveDaemon:
         text = self.cmd_lexicon.rewrite_taught_terms(speller_res["corrected"])
         clean_lower = text.lower()
 
+        # Step 0-Paraphrase: Rewrite indirect / idiomatic phrasings to canonical command forms
+        # (e.g. "get rid of notepad" -> "close notepad", "summon chrome" -> "open chrome")
+        # Runs on the already-normalised clean_lower so fillers have already been stripped.
+        paraphrase_input = clean_lower
+        rewritten_text, did_rewrite = self.paraphrase_rewriter.rewrite(paraphrase_input)
+        if did_rewrite:
+            text = rewritten_text
+            clean_lower = rewritten_text
+
         # Step 0-OutOfScope-Early: Identity and physical-world OOS check runs BEFORE the
         # destructive gate to prevent "who built you" matching "built" as destructive.
         oos_pat = r"\b(?:sing(?:\s+me)?(?:\s+a)?\s+(?:song|melody|tune)|dance\s+for\s+me|what(?:'s|\s+is)\s+the\s+weather|read\s+me\s+a\s+(?:book|story)|give\s+me\s+a\s+hug|make\s+me\s+(?:coffee|tea|food)|cook\s+for\s+me)\b"
@@ -549,6 +560,7 @@ class CognitiveDaemon:
                     "action_msg": action_msg,
                     "message": f"Opening your preferred {cat_singular}, {info.get('display_name', preferred)}."
                 }
+            else:
                 options = self.app_discovery.get_apps_in_category(cat_match)
                 if not options:
                     if cat_match == "games":

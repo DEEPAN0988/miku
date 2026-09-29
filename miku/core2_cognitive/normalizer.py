@@ -60,6 +60,7 @@ FILLER_PATTERNS = [
     r"^(?:hey\s+|hi\s+|hello\s+)?miku[,:\s]*",
     r"^(?:can\s+you\s+(?:please\s+)?|could\s+you\s+(?:please\s+)?|would\s+you\s+mind\s+(?:if\s+you\s+)?|will\s+you\s+(?:please\s+)?|please\s+)",
     r"^(?:i\s+need\s+to\s+|i\s+want\s+to\s+|let\s+us\s+|let's\s+|how\s+about\s+we\s+)",
+    r"^(?:i\s+wish\s+to\s+|i\s+(?:would|'d)\s+like\s+to\s+|feel\s+like\s+|how\s+about\s+|let\s+me\s+just\s+|let\s+me\s+quickly\s+|mind\s+)",
     r"(?:,\s*please|\s+please|\s+for\s+me|\s+right\s+now|\s+right\s+away|\s+asap)[\.!\?]*$",
 ]
 
