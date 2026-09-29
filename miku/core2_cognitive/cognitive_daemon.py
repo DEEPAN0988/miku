@@ -368,7 +368,7 @@ class CognitiveDaemon:
                 "status": "conversational_response",
                 "best_action": None,
                 "confidence": 1.0,
-                "message": "I am Miku, a computer assistant — I can open apps, manage files, and handle system tasks, but that's a bit outside what I can do!"
+                "message": "I am Miku, a computer assistant - I can open apps, manage files, and handle system tasks, but that's a bit outside what I can do!"
             }
 
         # Step 0-Destructive: Safeguard destructive actions.
