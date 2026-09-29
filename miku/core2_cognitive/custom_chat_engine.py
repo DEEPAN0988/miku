@@ -405,26 +405,5 @@ class CustomChatEngine:
             if q_clean == prompt or prompt in q_clean or q_clean in prompt:
                 return resp
 
-        # Generate via Causal LM
-        prompt_str = f"user: {q_clean} assistant:"
-        prompt_tokens = self.tokenizer.encode(prompt_str)[:-1]
-        idx = np.array([prompt_tokens], dtype=np.int64)
-
-        for _ in range(25):
-            cond = idx if idx.shape[1] <= 64 else idx[:, -64:]
-            logits, _ = self.model(cond)
-            next_token_logits = logits[0, -1, :] / 0.7
-            top_k_indices = np.argsort(next_token_logits)[-min(8, len(next_token_logits)):]
-            top_k_logits = next_token_logits[top_k_indices]
-            exp_l = np.exp(top_k_logits - np.max(top_k_logits))
-            probs = exp_l / (np.sum(exp_l) + 1e-12)
-            next_tok = np.random.choice(top_k_indices, p=probs)
-            idx = np.concatenate([idx, [[next_tok]]], axis=1)
-            if next_tok == self.tokenizer.vocab.get("<eos>", 2):
-                break
-
-        gen_tokens = idx[0].tolist()[len(prompt_tokens):]
-        text = self.tokenizer.decode(gen_tokens)
-        if not text or len(text.strip()) < 3:
-            return "I am Miku, operating strictly offline. How can I assist your system?"
-        return text
+        # Fallback for unrecognized phrases to prevent word salad from the tiny LM
+        return "I'm sorry, I don't know how to respond to that yet. I am a local assistant focused on controlling your PC, but you can teach me new phrases!"
