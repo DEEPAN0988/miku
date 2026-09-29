@@ -699,25 +699,13 @@ class CognitiveDaemon:
                         params["app_info"] = c_info
             else:
                 self.active_learning.log_failure(parsed_text, "low_confidence_intent", clf_res["confidence"], clf_res["top_intent"])
-                # If conversational or QA query, let chat engine handle it
-                qa_chat_pattern = r"^(?:who|what|why|how|when|where|tell\s+me|do\s+you|are\s+you|can\s+you|could\s+you|would\s+you|hi|hello|hey|yo|sup|greetings|good\s+(?:morning|afternoon|evening|night)|howdy|are\s+okay|help(?:\s+me)?|thanks?|thank\s+you|okay|ok|bye|goodbye|chat|talk)\b|^\?+$"
-                if re.match(qa_chat_pattern, clean_lower):
-                    chat_reply = self.chat_engine.respond(text)
-                    return {
-                        "query": text,
-                        "status": "conversational_response",
-                        "message": chat_reply,
-                        "confidence": 1.0
-                    }
-
-
-                # Otherwise, ask clarifying question offering top candidates
+                # Let the chat engine respond gracefully to any unrecognized/new command
+                chat_reply = self.chat_engine.respond(text)
                 return {
                     "query": text,
-                    "status": "clarification_needed",
-                    "best_action": "ask_clarification",
-                    "confidence": clf_res["confidence"],
-                    "message": clf_res["clarification_prompt"]
+                    "status": "conversational_response",
+                    "message": chat_reply,
+                    "confidence": 1.0
                 }
 
         # 2. OS State snapshot
