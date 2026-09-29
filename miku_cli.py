@@ -68,6 +68,11 @@ def run_interactive():
             if cmd.lower() in ("exit", "quit"):
                 break
 
+            if cmd.lower() in ("chat", "/chat", "chatbot", "chat mode"):
+                orchestrator.shutdown()
+                run_chat()
+                return
+
             # Process command through cognitive router
             from miku.ipc.messages import STTTranscriptMsg
             msg = STTTranscriptMsg(text=cmd, confidence=1.0)
@@ -147,13 +152,90 @@ def run_summary():
     mr = MissReviewer()
     mr.weekly_summary()
 
+def run_chat():
+    banner = r"""
+========================================================================
+                 MIKU CHATBOT MODE (Offline & Sovereign)
+  - Talk to Miku naturally as a personal assistant & chatbot.
+  - Execute PC commands ("open spotify", "screenshot", etc.) anytime!
+  - Type '/history' to view log, '/clear' to reset, or 'exit' to quit.
+========================================================================
+    """
+    print(banner)
+    orchestrator = MikuOrchestrator()
+    orchestrator.start()
+    print("[*] Miku Chatbot is online and ready. How can I help you today?\n")
+
+    history = []
+
+    try:
+        while True:
+            cmd = input("You > ").strip()
+            if not cmd:
+                continue
+            if cmd.lower() in ("exit", "quit", "bye", "goodbye"):
+                print("\n[Miku] Goodbye! Have a great day.")
+                break
+
+            if cmd.lower() == "/history":
+                print("\n--- Session History ---")
+                for u, m in history:
+                    print(f" You : {u}")
+                    print(f" Miku: {m}\n")
+                print("-----------------------\n")
+                continue
+
+            if cmd.lower() == "/clear":
+                history.clear()
+                print("\n[Miku] Session history cleared!\n")
+                continue
+
+            # Process prompt through cognitive daemon
+            from miku.ipc.messages import STTTranscriptMsg
+            msg = STTTranscriptMsg(text=cmd, confidence=1.0)
+            decision = orchestrator.cognitive_daemon.handle_transcript(msg)
+
+            status = decision.get("status")
+            if status == "dispatched":
+                action = decision["action_msg"]
+                res = orchestrator.execution_daemon.execute_request(action)
+                orchestrator.cognitive_daemon.handle_action_completion(res)
+                orchestrator.logger.log_action(res.task_id, action.action_type, action.target, res.status, res.message)
+                
+                # Conversational feedback after executing command
+                reply = decision.get("message") or res.message or f"Done! Executed {action.action_type} for '{action.target}'."
+                print(f"Miku > {reply}")
+                history.append((cmd, reply))
+
+            elif status in ("conversational_response", "clarification_needed"):
+                reply = decision.get("message", "I am right here! What would you like to do?")
+                print(f"Miku > {reply}")
+                history.append((cmd, reply))
+
+            elif status == "calibration_required":
+                reply = decision.get("message", "Calibration required before completing that action.")
+                print(f"Miku > {reply}")
+                history.append((cmd, reply))
+
+            else:
+                reply = decision.get("message") or f"Understood! '{cmd}'"
+                print(f"Miku > {reply}")
+                history.append((cmd, reply))
+
+            print()
+    finally:
+        orchestrator.shutdown()
+        print("\n[*] Miku Chatbot shut down cleanly.")
+
 def main():
     parser = argparse.ArgumentParser(description="Miku Sovereign Local Agent CLI")
-    parser.add_argument("mode", nargs="?", default="interactive", choices=["interactive", "calibrate", "status", "train", "review-misses", "forget-example", "weekly-summary"])
+    parser.add_argument("mode", nargs="?", default="interactive", choices=["interactive", "chat", "calibrate", "status", "train", "review-misses", "forget-example", "weekly-summary"])
     parser.add_argument("ex_id", nargs="?", default=None, help="Example ID to forget")
     args = parser.parse_args()
 
-    if args.mode == "calibrate":
+    if args.mode == "chat":
+        run_chat()
+    elif args.mode == "calibrate":
         run_calibrate()
     elif args.mode == "status":
         run_status()
